@@ -37,7 +37,7 @@ import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -96,7 +96,7 @@ public abstract class DynamicJdbcConfigUtils {
 
         logger.debug("{} DynamicJdbcConfig configuration properties[prefix : '{}'] were found", size, prefix);
 
-        Map<String, DynamicJdbcConfig> dynamicJdbcConfigs = new HashMap<>(size);
+        Map<String, DynamicJdbcConfig> dynamicJdbcConfigs = new LinkedHashMap<>(size);
 
         for (String propertyName : propertyNames) {
             if (StringUtils.isEmpty(environment.getProperty(propertyName))) {

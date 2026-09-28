@@ -58,7 +58,7 @@ public class JdbcURLAssembler {
 
     public String assemble(String rawJdbcURL) {
 
-        logger.debug("The raw JDBC URL : {}" + rawJdbcURL);
+        logger.debug("The raw JDBC URL : {}", rawJdbcURL);
 
         if (StringUtils.isBlank(rawJdbcURL)) {
             return rawJdbcURL;
@@ -82,7 +82,7 @@ public class JdbcURLAssembler {
 
         url = JDBC_URL_PREFIX + rebuildURL(uri, queryParams);
 
-        logger.debug("The assembled JDBC URL : {}" + url);
+        logger.debug("The assembled JDBC URL : {}", url);
 
         return url;
     }

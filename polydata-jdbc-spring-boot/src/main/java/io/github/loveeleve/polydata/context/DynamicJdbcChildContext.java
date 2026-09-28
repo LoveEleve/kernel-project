@@ -129,7 +129,7 @@ public class DynamicJdbcChildContext extends AnnotationConfigApplicationContext 
     }
 
     protected void prepareEnvironment(ConfigurableEnvironment environment) {
-        // For Spring Boot 2 Binder
+        // Attach the ConfigurationPropertySources for the Spring Boot Binder
         ConfigurationPropertySources.attach(getEnvironment());
     }
 

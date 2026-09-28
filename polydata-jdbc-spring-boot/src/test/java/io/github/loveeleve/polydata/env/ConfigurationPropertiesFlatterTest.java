@@ -21,9 +21,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * {@link ConfigurationPropertiesFlatter} Test
@@ -50,5 +53,17 @@ class ConfigurationPropertiesFlatterTest extends AbstractTest {
         assertEquals("tx1", flattenProperties.get("transaction.name"));
         assertEquals("3", flattenProperties.get("transaction.properties.defaultTimeout"));
         assertEquals("true", flattenProperties.get("transaction.properties.rollbackOnCommitFailure"));
+    }
+
+    @Test
+    void testFlatWithNullElement() {
+        Map<String, Object> nestedProperties = new LinkedHashMap<>();
+        nestedProperties.put("values", Arrays.asList("a", null, "b"));
+
+        Map<String, String> flattenProperties = resolver.flat(nestedProperties);
+
+        assertEquals("a", flattenProperties.get("values[0]"));
+        assertEquals("b", flattenProperties.get("values[2]"));
+        assertFalse(flattenProperties.containsKey("values[1]"));
     }
 }

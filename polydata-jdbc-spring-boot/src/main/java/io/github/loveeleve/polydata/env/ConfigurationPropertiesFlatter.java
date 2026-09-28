@@ -89,7 +89,12 @@ public class ConfigurationPropertiesFlatter {
     private void flatMultiple(String containerPropertyName, Iterable elements, Map<String, String> flattenProperties) {
         int index = 0;
         for (Object element : elements) {
-            flat(containerPropertyName + "[" + index++ + "]", element, element.getClass(), flattenProperties);
+            if (element == null) {
+                logger.warn("The null element at index[{}] of the property [{}] will be ignored", index, containerPropertyName);
+            } else {
+                flat(containerPropertyName + "[" + index + "]", element, element.getClass(), flattenProperties);
+            }
+            index++;
         }
     }
 

@@ -128,20 +128,18 @@ public class DynamicJdbcContextApplicationListener extends OnceApplicationPrepar
             });
         }
 
-        boolean terminated = false;
+        // All the tasks have been submitted, shut down the executor so that the termination can be
+        // awaited properly
+        executorService.shutdown();
 
-        long completedTaskCount = 0;
-
-        while (!terminated) {
-            try {
-                terminated = executorService.awaitTermination(1, TimeUnit.SECONDS);
-                completedTaskCount = executorService.getCompletedTaskCount();
-                if (completedTaskCount == parallelism) {
-                    break;
-                }
-            } catch (InterruptedException e) {
-                terminated = true;
+        try {
+            while (!executorService.awaitTermination(1, TimeUnit.SECONDS)) {
+                logger.debug("Waiting for the initialization of {} DynamicJdbcChildContext(s) to be completed ...",
+                        parallelism);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("The initialization of the DynamicJdbcChildContexts was interrupted");
         }
 
         if (initializeErrors.hasError()) {
@@ -149,9 +147,6 @@ public class DynamicJdbcContextApplicationListener extends OnceApplicationPrepar
         }
 
         appendExclusionAutoConfigurationProperty(context);
-        // help gc
-        executorService.shutdownNow();
-        executorService = null;
     }
 
     private void initializeDynamicJdbcChildContext(Map.Entry<String, DynamicJdbcConfig> dynamicJdbcConfigEntry,
