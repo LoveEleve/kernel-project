@@ -20,6 +20,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
 import static io.github.loveeleve.polyzone.ZoneConstants.DEFAULT_ZONE;
+import static io.github.loveeleve.polyzone.ZoneConstants.ORIGINAL_ZONE;
 import static io.github.loveeleve.polyzone.ZoneConstants.ZONE_PROPERTY_NAME;
 
 /**
@@ -50,11 +51,17 @@ public class DefaultZoneLocator extends AbstractZoneLocator {
     @Override
     public String locate(Environment environment) {
         String zone = environment.getProperty(ZONE_PROPERTY_NAME);
-        if (StringUtils.hasText(zone)) {
+        if (StringUtils.hasText(zone) && !ORIGINAL_ZONE.equalsIgnoreCase(zone)) {
             logger.info("The zone ['{}'] was located from the Spring Property [name: '{}']", zone, ZONE_PROPERTY_NAME);
         } else {
-            logger.trace("The property [name : '{}' ] of zone can't be found, the default value ['{}'] will be applied",
-                    ZONE_PROPERTY_NAME, DEFAULT_ZONE);
+            if (StringUtils.hasText(zone)) {
+                logger.info("The Spring Property [name : '{}'] is set to the marker value '{}' requesting the "
+                        + "auto-detection, the default value ['{}'] will be applied", ZONE_PROPERTY_NAME, zone,
+                        DEFAULT_ZONE);
+            } else {
+                logger.trace("The property [name : '{}' ] of zone can't be found, the default value ['{}'] will be applied",
+                        ZONE_PROPERTY_NAME, DEFAULT_ZONE);
+            }
             zone = DEFAULT_ZONE;
         }
         return zone;

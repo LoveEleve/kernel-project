@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static io.github.loveeleve.polyzone.ZoneConstants.DEFAULT_ZONE;
+import static io.github.loveeleve.polyzone.ZoneConstants.ORIGINAL_ZONE;
 import static io.github.loveeleve.polyzone.ZoneConstants.ZONE_PROPERTY_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -76,6 +77,19 @@ class DefaultZoneLocatorTest {
     void testLocateWithoutZonePropertyFallsBackToDefault() {
         DefaultZoneLocator locator = new DefaultZoneLocator();
         StandardEnvironment environment = new StandardEnvironment();
+
+        String zone = locator.locate(environment);
+        assertEquals(DEFAULT_ZONE, zone);
+    }
+
+    @Test
+    void testLocateWithOriginalZoneMarkerFallsBackToDefault() {
+        DefaultZoneLocator locator = new DefaultZoneLocator();
+        StandardEnvironment environment = new StandardEnvironment();
+
+        Map<String, Object> props = new HashMap<>();
+        props.put(ZONE_PROPERTY_NAME, ORIGINAL_ZONE);
+        environment.getPropertySources().addFirst(new MapPropertySource("test", props));
 
         String zone = locator.locate(environment);
         assertEquals(DEFAULT_ZONE, zone);

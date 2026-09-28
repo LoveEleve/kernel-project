@@ -21,9 +21,19 @@ import io.github.loveeleve.polyzone.spring.CompositeZoneLocator;
 import io.github.loveeleve.polyzone.spring.ZoneLocator;
 import io.github.loveeleve.polyzone.spring.boot.condition.ConditionalOnZoneAvailable;
 import io.github.loveeleve.polyzone.spring.event.ZoneContextChangedListener;
+import org.springframework.beans.factory.BeanClassLoaderAware;
+import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.context.ApplicationEventPublisherAware;
+import org.springframework.context.ApplicationStartupAware;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.EmbeddedValueResolverAware;
+import org.springframework.context.EnvironmentAware;
+import org.springframework.context.MessageSourceAware;
+import org.springframework.context.ResourceLoaderAware;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -69,6 +79,8 @@ public class ZoneAutoConfiguration {
         // Load from Spring Factories
         List<ZoneLocator> zoneLocators =
                 SpringFactoriesLoader.forDefaultResourceLocation(context.getClassLoader()).load(ZoneLocator.class);
+        // Invoke the lifecycle callbacks (EnvironmentAware, ...) on the factory-loaded locators
+        zoneLocators.forEach(zoneLocator -> invokeBeanInterfaces(zoneLocator, context));
         List<ZoneLocator> allZoneLocators = new ArrayList<>(zoneLocatorBeans.size() + zoneLocators.size());
         // Add ZoneLocator Spring Beans
         allZoneLocators.addAll(zoneLocatorBeans);
@@ -77,6 +89,48 @@ public class ZoneAutoConfiguration {
         // Sort by the order
         AnnotationAwareOrderComparator.sort(allZoneLocators);
         return new CompositeZoneLocator(allZoneLocators);
+    }
+
+    /**
+     * Invoke the Spring lifecycle callbacks on a factory-loaded object, mirroring the bean
+     * lifecycle for the supported interfaces (excluding {@link org.springframework.beans.factory.BeanNameAware},
+     * which requires a bean name that a factory-loaded object does not have).
+     */
+    private static void invokeBeanInterfaces(Object bean, ConfigurableApplicationContext context) {
+        if (bean instanceof EnvironmentAware) {
+            ((EnvironmentAware) bean).setEnvironment(context.getEnvironment());
+        }
+        if (bean instanceof EmbeddedValueResolverAware) {
+            ((EmbeddedValueResolverAware) bean).setEmbeddedValueResolver(context.getBeanFactory()::resolveEmbeddedValue);
+        }
+        if (bean instanceof ResourceLoaderAware) {
+            ((ResourceLoaderAware) bean).setResourceLoader(context);
+        }
+        if (bean instanceof ApplicationEventPublisherAware) {
+            ((ApplicationEventPublisherAware) bean).setApplicationEventPublisher(context);
+        }
+        if (bean instanceof MessageSourceAware) {
+            ((MessageSourceAware) bean).setMessageSource(context);
+        }
+        if (bean instanceof ApplicationStartupAware) {
+            ((ApplicationStartupAware) bean).setApplicationStartup(context.getApplicationStartup());
+        }
+        if (bean instanceof ApplicationContextAware) {
+            ((ApplicationContextAware) bean).setApplicationContext(context);
+        }
+        if (bean instanceof BeanFactoryAware) {
+            ((BeanFactoryAware) bean).setBeanFactory(context.getBeanFactory());
+        }
+        if (bean instanceof BeanClassLoaderAware) {
+            ((BeanClassLoaderAware) bean).setBeanClassLoader(context.getClassLoader());
+        }
+        if (bean instanceof InitializingBean) {
+            try {
+                ((InitializingBean) bean).afterPropertiesSet();
+            } catch (Exception e) {
+                throw new IllegalStateException("The factory-loaded bean [" + bean + "] failed to initialize", e);
+            }
+        }
     }
 
 }

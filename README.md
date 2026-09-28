@@ -76,13 +76,12 @@ polyzone:
   zone.locator:
     timeout: 3000                 # 元数据端点超时（毫秒，默认 3000）
     fast-fail: false              # 定位失败是否阻止启动（默认 false）
+  spring.cloud.loadbalancer.customized: true   # 把 PolyZone 的过滤器注册为所有 LB 客户端的默认配置
 
 spring:
   cloud:
     loadbalancer:
       configurations: optimized-zone-preference   # 启用 PolyZone 的实例列表过滤器
-polyzone:
-  spring.cloud.loadbalancer.customized: true      # 把过滤器注册为所有 LB 客户端的默认配置
 ```
 
 ### 3. 效果
@@ -171,7 +170,28 @@ filter(instances):
 mvn clean test
 ```
 
-当前测试覆盖：定位链、优先算法全分支、配置中心切换链路、故障转移与回滚、AWS 三类定位器、LoadBalancer 过滤、自动配置装配，共 125 个用例。
+当前测试覆盖：定位链、优先算法全分支、配置中心切换链路、故障转移与回滚、AWS 三类定位器、LoadBalancer 过滤与配置装配、工厂加载生命周期回调，共 132 个用例。
+
+## 注意事项
+
+- **非 AWS 环境的定位开销**：`Ec2AvailabilityZoneEndpointZoneLocator.supports()` 恒为 true，在非 AWS
+  环境会先尝试访问 `169.254.169.254`，直到超时（默认 3s）才回退到属性定位。生产上非 AWS 环境建议显式
+  配置 `polyzone.zone`，或在 `originalZone` 首次同步时接受一次 3s 的启动开销。
+- **区域信息附加依赖自动注册**：`ZoneAttachmentListener` 监听 Spring Cloud 的
+  `InstancePreRegisteredEvent`，该事件由 `AbstractAutoServiceRegistration` 发布（Nacos/Eureka/Consul
+  的自动注册均继承自它）；手工注册实例不会触发。
+- **回滚基线语义**：`originalZone` 回到"首次同步时的区域"——属性缺省时由定位链自动识别（AWS 元数据），
+  否则为首次配置的区域值。
+
+## 与 microsphere-multiactive 的差异
+
+- 移除 Netflix/Ribbon/Eureka 专属模块（Ribbon 已停止维护），Eureka 注册场景由原生
+  `InstancePreRegisteredEvent` 覆盖
+- 属性命名空间由 `microsphere.availability.zone.*` 调整为 `polyzone.zone.*`
+- 修复 `originalZone` 回滚语义：记住首次同步的原始区域，即使 zone 属性被显式改过也能正确回滚
+- 修复 `PropertyChangeEvent` 时序：先提交新值再通知监听器，监听器内读到的永远是最新值
+- 修复 factories 加载的定位器生命周期缺失：补齐 `EnvironmentAware` 等回调，`locator.timeout` 等属性生效
+- 去除对 microsphere 构件的依赖，仅依赖 Spring 官方组件
 
 ## Roadmap
 

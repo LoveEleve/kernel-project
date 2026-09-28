@@ -23,8 +23,10 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.Objects;
 import java.util.StringJoiner;
+import java.util.function.Consumer;
 
 import static io.github.loveeleve.polyzone.Strings.isBlank;
+import static io.github.loveeleve.polyzone.Strings.isNotBlank;
 import static io.github.loveeleve.polyzone.Strings.split;
 import static io.github.loveeleve.polyzone.Strings.trimAllWhitespace;
 import static io.github.loveeleve.polyzone.ZoneConstants.CURRENT_ZONE_PROPERTY_NAME;
@@ -70,48 +72,45 @@ public class ZoneContext {
     private final PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
 
     public void setEnabled(boolean enabled) {
-        if (isPropertyChanged("enabled", this.enabled, enabled)) {
-            this.enabled = enabled;
-        }
+        updateProperty("enabled", this.enabled, enabled, value -> this.enabled = value);
     }
 
     public void setZone(String zone) {
-        if (isPropertyChanged("zone", this.zone, zone)) {
-            this.zone = trimAllWhitespace(zone);
-        }
+        updateProperty("zone", this.zone, trimAllWhitespace(zone), value -> {
+            this.zone = value;
+            // Keep the global accessor consistent with the context
+            if (isNotBlank(value)) {
+                System.setProperty(CURRENT_ZONE_PROPERTY_NAME, value);
+            } else {
+                System.clearProperty(CURRENT_ZONE_PROPERTY_NAME);
+            }
+        });
     }
 
     public void setPreferenceEnabled(boolean preferenceEnabled) {
-        if (isPropertyChanged("preferenceEnabled", this.preferenceEnabled, preferenceEnabled)) {
-            this.preferenceEnabled = preferenceEnabled;
-        }
+        updateProperty("preferenceEnabled", this.preferenceEnabled, preferenceEnabled,
+                value -> this.preferenceEnabled = value);
     }
 
     public void setPreferenceFilterOrder(int preferenceFilterOrder) {
-        if (isPropertyChanged("preferenceFilterOrder", this.preferenceFilterOrder, preferenceFilterOrder)) {
-            this.preferenceFilterOrder = preferenceFilterOrder;
-        }
+        updateProperty("preferenceFilterOrder", this.preferenceFilterOrder, preferenceFilterOrder,
+                value -> this.preferenceFilterOrder = value);
     }
 
     public void setPreferenceUpstreamZoneReadyPercentage(int preferenceUpstreamZoneReadyPercentage) {
-        if (isPropertyChanged("preferenceUpstreamZoneReadyPercentage", this.preferenceUpstreamZoneReadyPercentage,
-                preferenceUpstreamZoneReadyPercentage)) {
-            this.preferenceUpstreamZoneReadyPercentage = preferenceUpstreamZoneReadyPercentage;
-        }
+        updateProperty("preferenceUpstreamZoneReadyPercentage", this.preferenceUpstreamZoneReadyPercentage,
+                preferenceUpstreamZoneReadyPercentage, value -> this.preferenceUpstreamZoneReadyPercentage = value);
     }
 
     public void setPreferenceUpstreamSameZoneMinAvailable(int preferenceUpstreamSameZoneMinAvailable) {
-        if (isPropertyChanged("preferenceUpstreamSameZoneMinAvailable", this.preferenceUpstreamSameZoneMinAvailable,
-                preferenceUpstreamSameZoneMinAvailable)) {
-            this.preferenceUpstreamSameZoneMinAvailable = preferenceUpstreamSameZoneMinAvailable;
-        }
+        updateProperty("preferenceUpstreamSameZoneMinAvailable", this.preferenceUpstreamSameZoneMinAvailable,
+                preferenceUpstreamSameZoneMinAvailable, value -> this.preferenceUpstreamSameZoneMinAvailable = value);
     }
 
     public void setPreferenceUpstreamDisabledZone(String preferenceUpstreamDisabledZone) {
-        if (isPropertyChanged("preferenceUpstreamDisabledZone", this.preferenceUpstreamDisabledZone,
-                preferenceUpstreamDisabledZone)) {
-            this.preferenceUpstreamDisabledZone = resolveCommaDelimited(preferenceUpstreamDisabledZone);
-        }
+        updateProperty("preferenceUpstreamDisabledZone", this.preferenceUpstreamDisabledZone,
+                resolveCommaDelimited(preferenceUpstreamDisabledZone),
+                value -> this.preferenceUpstreamDisabledZone = value);
     }
 
     private String resolveCommaDelimited(String value) {
@@ -213,16 +212,19 @@ public class ZoneContext {
         setPreferenceUpstreamDisabledZone(DEFAULT_PREFERENCE_UPSTREAM_DISABLED_ZONE);
     }
 
-    private boolean isPropertyChanged(String propertyName, Object previousPropertyValue, Object newPropertyValue) {
-        boolean changed = !Objects.equals(previousPropertyValue, newPropertyValue);
-        if (changed) {
-            propertyChangeSupport.firePropertyChange(propertyName, previousPropertyValue, newPropertyValue);
-            logger.info("The property value [name : '{}'] is changed from '{}' to '{}'", propertyName,
-                    previousPropertyValue, newPropertyValue);
-        } else {
-            logger.trace("The property value [name : '{}'] is not changed : '{}'", propertyName, previousPropertyValue);
+    /**
+     * Update the property value and fire a {@link java.beans.PropertyChangeEvent} after the new
+     * value has been committed, so that listeners always observe the up-to-date value.
+     */
+    private <T> void updateProperty(String propertyName, T previousValue, T newValue, Consumer<T> valueSetter) {
+        if (Objects.equals(previousValue, newValue)) {
+            logger.trace("The property value [name : '{}'] is not changed : '{}'", propertyName, previousValue);
+            return;
         }
-        return changed;
+        valueSetter.accept(newValue);
+        propertyChangeSupport.firePropertyChange(propertyName, previousValue, newValue);
+        logger.info("The property value [name : '{}'] is changed from '{}' to '{}'", propertyName, previousValue,
+                newValue);
     }
 
     @Override

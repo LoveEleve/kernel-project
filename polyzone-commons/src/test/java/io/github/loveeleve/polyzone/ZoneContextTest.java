@@ -262,6 +262,34 @@ class ZoneContextTest {
     }
 
     @Test
+    void testZoneIsCommittedBeforePropertyChangeEventFired() {
+        List<String> observedZones = new ArrayList<>();
+        PropertyChangeListener listener = event -> {
+            if ("zone".equals(event.getPropertyName())) {
+                observedZones.add(zoneContext.getZone());
+            }
+        };
+        zoneContext.addPropertyChangeListener(listener);
+
+        zoneContext.setZone("zone-committed");
+
+        assertEquals(1, observedZones.size());
+        assertEquals("zone-committed", observedZones.get(0));
+        zoneContext.removePropertyChangeListener(listener);
+    }
+
+    @Test
+    void testCurrentZoneSystemPropertyIsUpdatedOnSetZone() {
+        System.clearProperty(CURRENT_ZONE_PROPERTY_NAME);
+
+        zoneContext.setZone("zone-sys");
+        assertEquals("zone-sys", ZoneContext.getCurrentZone());
+
+        zoneContext.setZone("  ");
+        assertEquals(DEFAULT_ZONE, ZoneContext.getCurrentZone());
+    }
+
+    @Test
     void testPropertyChangeEventFiredForAllProperties() {
         List<PropertyChangeEvent> events = new ArrayList<>();
         PropertyChangeListener listener = events::add;

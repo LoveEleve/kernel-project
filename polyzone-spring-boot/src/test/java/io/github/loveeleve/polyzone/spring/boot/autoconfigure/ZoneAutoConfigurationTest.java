@@ -90,4 +90,10 @@ class ZoneAutoConfigurationTest {
             assertThat(ZoneContext.get().getZone()).isEqualTo("zone-b");
         });
     }
+
+    @Test
+    void testFactoryLoadedZoneLocatorsReceiveLifecycleCallbacks() {
+        contextRunner.run(context ->
+                assertThat(TestEnvironmentAwareZoneLocator.environment).isSameAs(context.getEnvironment()));
+    }
 }
