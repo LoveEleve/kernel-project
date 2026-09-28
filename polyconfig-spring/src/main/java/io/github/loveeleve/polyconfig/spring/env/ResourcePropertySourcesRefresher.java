@@ -69,23 +69,36 @@ public class ResourcePropertySourcesRefresher {
     /**
      * @return the resource values managed by this refresher
      */
-    public Set<String> getResourceValues() {
+    public synchronized Set<String> getResourceValues() {
         return new LinkedHashSet<>(resourceSources.keySet());
     }
 
     /**
      * Refresh the property sources of the given resource value with the new resource content.
      *
+     * <p>
+     * The method is thread-safe: the state update is performed under the monitor of this refresher,
+     * while the event is published outside the lock so that listeners never run while holding it.
+     *
      * @param resourceValue the resource value (e.g. the Nacos dataId)
      * @param resource      the new resource content
      */
     public void refresh(String resourceValue, Resource resource) {
+        List<ConfigPropertyChangedEvent> changes = doRefresh(resourceValue, resource);
+        if (changes != null && !changes.isEmpty()) {
+            logger.info("The property source [{}] is refreshed, {} propert{} changed", sourceName, changes.size(),
+                    changes.size() > 1 ? "ies" : "y");
+            changePublisher.publish(sourceName, changes);
+        }
+    }
+
+    private synchronized List<ConfigPropertyChangedEvent> doRefresh(String resourceValue, Resource resource) {
         List<PropertySource<?>> newPropertySources;
         try {
             newPropertySources = ResourcePropertySources.load(resourceValue, resource, encoding);
         } catch (Throwable e) {
             logger.error("The resource [{}] can't be reloaded for the property source [{}]", resourceValue, sourceName, e);
-            return;
+            return null;
         }
 
         Map<String, Object> oldProperties = ResourcePropertySources.flatten(resourceSources.get(resourceValue));
@@ -95,15 +108,12 @@ public class ResourcePropertySourcesRefresher {
         if (changes.isEmpty()) {
             logger.info("The properties of the resource [{}] are not changed in the property source [{}]", resourceValue,
                     sourceName);
-            return;
+            return null;
         }
 
         resourceSources.put(resourceValue, newPropertySources);
         rebuildAndReplace();
-
-        logger.info("The property source [{}] is refreshed, {} propert{} changed", sourceName, changes.size(),
-                changes.size() > 1 ? "ies" : "y");
-        changePublisher.publish(sourceName, changes);
+        return changes;
     }
 
     private List<ConfigPropertyChangedEvent> diff(Map<String, Object> oldProperties, Map<String, Object> newProperties) {
@@ -140,7 +150,7 @@ public class ResourcePropertySourcesRefresher {
      *
      * @return the resource value to property source names mapping
      */
-    public Map<String, List<String>> getResourcePropertySourceNames() {
+    public synchronized Map<String, List<String>> getResourcePropertySourceNames() {
         Map<String, List<String>> result = new LinkedHashMap<>(resourceSources.size());
         resourceSources.forEach((resourceValue, sources) -> {
             List<String> names = new ArrayList<>(sources.size());

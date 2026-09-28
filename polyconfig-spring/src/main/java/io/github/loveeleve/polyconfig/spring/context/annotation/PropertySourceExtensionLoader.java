@@ -138,6 +138,7 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
         CompositePropertySource compositePropertySource = new CompositePropertySource(propertySourceName);
         Map<String, List<PropertySource<?>>> resourceSources = new LinkedHashMap<>();
         String encoding = resolveEncoding(attributes);
+        boolean ignoreResourceNotFound = getBoolean(attributes, "ignoreResourceNotFound", false);
 
         for (String resourceValue : resourceValues) {
             try {
@@ -149,13 +150,13 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
                     }
                 }
                 if (loadedPropertySources.isEmpty()) {
-                    handleResourceNotFound(attributes, metadata, resourceValue);
+                    handleResourceNotFound(ignoreResourceNotFound, metadata, resourceValue);
                     continue;
                 }
                 loadedPropertySources.forEach(compositePropertySource::addPropertySource);
                 resourceSources.put(resourceValue, loadedPropertySources);
             } catch (Throwable e) {
-                if (attributes.getBoolean("ignoreResourceNotFound")) {
+                if (ignoreResourceNotFound) {
                     logger.warn("The property source resource [{}] of the class [{}] can't be loaded", resourceValue,
                             metadata.getClassName(), e);
                 } else {
@@ -175,7 +176,7 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
         logger.info("The property source [{}] has been added into the Environment by the annotation [{}] on the class [{}]",
                 propertySourceName, getAnnotationType().getName(), metadata.getClassName());
 
-        if (attributes.getBoolean("autoRefreshed")) {
+        if (getBoolean(attributes, "autoRefreshed", false)) {
             ResourcePropertySourcesRefresher refresher = new ResourcePropertySourcesRefresher(propertySourceName,
                     resourceSources, propertySources, createConfigChangePublisher(), encoding);
             try {
@@ -190,11 +191,11 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
     }
 
     protected String[] getResourceValues(AnnotationAttributes attributes) {
-        return attributes.getStringArray("value");
+        return getStringArray(attributes, "value");
     }
 
     protected String resolvePropertySourceName(AnnotationAttributes attributes, AnnotationMetadata metadata) {
-        String name = attributes.getString("name");
+        String name = getString(attributes, "name", null);
         if (StringUtils.hasText(name)) {
             return name;
         }
@@ -202,25 +203,31 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
     }
 
     protected String resolveEncoding(AnnotationAttributes attributes) {
-        String encoding = attributes.getString("encoding");
+        String encoding = getString(attributes, "encoding", null);
         return StringUtils.hasText(encoding) ? encoding : "UTF-8";
     }
 
     protected void addPropertySource(AnnotationAttributes attributes, MutablePropertySources propertySources,
                                      PropertySource<?> propertySource) {
-        if (attributes.getBoolean("first")) {
+        if (getBoolean(attributes, "first", false)) {
             propertySources.addFirst(propertySource);
             return;
         }
-        String after = attributes.getString("after");
-        if (StringUtils.hasText(after) && propertySources.contains(after)) {
-            propertySources.addAfter(after, propertySource);
-            return;
+        String after = getString(attributes, "after", null);
+        if (StringUtils.hasText(after)) {
+            if (propertySources.contains(after)) {
+                propertySources.addAfter(after, propertySource);
+                return;
+            }
+            logger.debug("The property source [{}] is not found, the 'after' attribute is ignored", after);
         }
-        String before = attributes.getString("before");
-        if (StringUtils.hasText(before) && propertySources.contains(before)) {
-            propertySources.addBefore(before, propertySource);
-            return;
+        String before = getString(attributes, "before", null);
+        if (StringUtils.hasText(before)) {
+            if (propertySources.contains(before)) {
+                propertySources.addBefore(before, propertySource);
+                return;
+            }
+            logger.debug("The property source [{}] is not found, the 'before' attribute is ignored", before);
         }
         propertySources.addLast(propertySource);
     }
@@ -247,15 +254,52 @@ public abstract class PropertySourceExtensionLoader<A extends Annotation>
         return new ConfigChangePublisher(eventPublisher);
     }
 
-    private void handleResourceNotFound(AnnotationAttributes attributes, AnnotationMetadata metadata,
+    private void handleResourceNotFound(boolean ignoreResourceNotFound, AnnotationMetadata metadata,
                                         String resourceValue) {
         String message = "The property source resource [" + resourceValue + "] of the class ["
                 + metadata.getClassName() + "] can't be found";
-        if (attributes.getBoolean("ignoreResourceNotFound")) {
+        if (ignoreResourceNotFound) {
             logger.warn(message);
         } else {
             throw new IllegalStateException(message);
         }
+    }
+
+    /**
+     * Get a {@link String} attribute with the default value applied when the backend annotation does
+     * not declare it.
+     */
+    protected String getString(AnnotationAttributes attributes, String attributeName, String defaultValue) {
+        Object value = attributes.get(attributeName);
+        return value instanceof String ? (String) value : defaultValue;
+    }
+
+    /**
+     * Get a {@code boolean} attribute with the default value applied when the backend annotation does
+     * not declare it.
+     */
+    protected boolean getBoolean(AnnotationAttributes attributes, String attributeName, boolean defaultValue) {
+        Object value = attributes.get(attributeName);
+        return value instanceof Boolean ? (Boolean) value : defaultValue;
+    }
+
+    /**
+     * Get a {@link String} array attribute, tolerating both {@code String[]} and {@code Object[]}.
+     */
+    protected String[] getStringArray(AnnotationAttributes attributes, String attributeName) {
+        Object value = attributes.get(attributeName);
+        if (value instanceof String[]) {
+            return (String[]) value;
+        }
+        if (value instanceof Object[]) {
+            Object[] array = (Object[]) value;
+            String[] result = new String[array.length];
+            for (int i = 0; i < array.length; i++) {
+                result[i] = array[i] == null ? null : array[i].toString();
+            }
+            return result;
+        }
+        return new String[0];
     }
 
     protected ConfigurableEnvironment getConfigurableEnvironment() {

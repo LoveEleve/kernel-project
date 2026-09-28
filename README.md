@@ -173,7 +173,31 @@ PolyConfig 不替代各配置中心客户端，而是把它们的加载/刷新�
 mvn clean test
 ```
 
-当前 21 个用例：统一事件模型、事件发布、刷新器（diff/替换/无变化不发事件）、Loader 模板（加载/顺序/自动刷新/资源缺失/YAML）、自动配置、EnvironmentChangeEvent 适配、Nacos 加载与自动刷新。
+当前 24 个用例：统一事件模型、事件发布、刷新器（diff/替换/无变化不发事件/线程安全）、Loader 模板（加载/顺序/自动刷新/资源缺失/YAML/三方后端注解缺省属性）、真实 ApplicationContext 端到端、自动配置、EnvironmentChangeEvent 适配、Nacos 加载与自动刷新。
+
+## 注意事项
+
+- **事件来源可能重复**：如果同时使用声明式加载（`@NacosPropertySource`）与 Spring Cloud 标准刷新，同一次
+  配置变更可能产生两个 `ConfigPropertiesChangedEvent`（source 分别为属性源名与 `"environment"`）。消费端应
+  做幂等处理或按 `source` 过滤。
+- **环境适配的旧值为空**：`EnvironmentChangeEvent` 只携带变更的属性名，因此 `"environment"` 来源的事件中
+  `oldValue` 为 `null`，请以 `getNewProperties()` 为准。
+- **YAML 编码固定 UTF-8**：`.yml` / `.yaml` 由 SnakeYAML 按 UTF-8 解析，`encoding` 属性只对
+  `.properties` / `.xml` 生效。
+- **刷新是线程安全的**：`ResourcePropertySourcesRefresher` 的状态更新在锁内完成，事件在锁外发布，避免
+  Nacos 推送线程与业务线程竞争，也避免监听器在持锁状态下执行。
+- **暂不支持资源通配符**：如 `classpath*:/config/*.properties` 的批量资源模式尚未实现（按需补充）。
+
+## 与 microsphere-configuration 的差异
+
+- 修正原版 Nacos 注解拼写错误：`NacosPorpertySource` → `@NacosPropertySource`
+- 事件模型重设计：原版是 PropertySource 级（ADDED/REPLACED/REMOVED），PolyConfig 是属性级
+  （属性名 + 新旧值 + 来源），更贴合"哪些配置变了"的消费场景
+- 新增通用适配：`EnvironmentChangeEvent` → 统一事件（原版无此路径，必须走注解加载才有事件）
+- Nacos 后端改用官方 `nacos-client` SDK（原版为自研 OpenAPI HTTP 客户端），自动刷新更可靠
+- Loader 对后端注解的属性读取有缺省兜底（三方后端注解不必声明全部通用属性）
+- 刷新器线程安全（原版无同步）
+- Apollo / etcd / ZooKeeper 后端在 Roadmap
 
 ## Roadmap
 

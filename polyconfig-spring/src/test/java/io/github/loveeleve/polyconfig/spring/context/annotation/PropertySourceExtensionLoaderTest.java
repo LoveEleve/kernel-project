@@ -21,10 +21,12 @@ import io.github.loveeleve.polyconfig.spring.event.ConfigPropertiesChangedEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.annotation.AnnotationAttributes;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.core.annotation.AliasFor;
+import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
@@ -128,6 +130,51 @@ class PropertySourceExtensionLoaderTest {
         assertEquals("polyconfig-yaml", context.getEnvironment().getProperty("app.name"));
     }
 
+    // ---- End-to-end tests through a real ApplicationContext ----
+
+    @Test
+    void testIntegrationWithApplicationContext() {
+        try (AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext()) {
+            applicationContext.register(IntegrationConfig.class);
+            applicationContext.refresh();
+            assertEquals("polyconfig", applicationContext.getEnvironment().getProperty("app.name"));
+        }
+    }
+
+    @Test
+    void testIntegrationAutoRefreshPublishesEvent() {
+        try (AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext()) {
+            List<ConfigPropertiesChangedEvent> events = new ArrayList<>();
+            applicationContext.addApplicationListener(event -> {
+                if (event instanceof ConfigPropertiesChangedEvent) {
+                    events.add((ConfigPropertiesChangedEvent) event);
+                }
+            });
+
+            applicationContext.register(IntegrationAutoRefreshConfig.class);
+            applicationContext.refresh();
+            assertEquals("polyconfig", applicationContext.getEnvironment().getProperty("app.name"));
+
+            ResourcePropertySourcesRefresher refresher = TestPropertySourceLoader.lastRefresher;
+            assertNotNull(refresher);
+            refresher.refresh("app.properties",
+                    new ByteArrayResource("app.name=polyconfig-integration-v2".getBytes(UTF_8)));
+
+            assertEquals("polyconfig-integration-v2", applicationContext.getEnvironment().getProperty("app.name"));
+            assertEquals(1, events.size());
+            assertTrue(events.get(0).isChanged("app.name"));
+        }
+    }
+
+    @Test
+    void testBackendAnnotationWithoutOptionalAttributes() {
+        try (AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext()) {
+            applicationContext.register(MinimalConfig.class);
+            applicationContext.refresh();
+            assertEquals("polyconfig", applicationContext.getEnvironment().getProperty("app.name"));
+        }
+    }
+
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
     @Inherited
@@ -204,5 +251,49 @@ class PropertySourceExtensionLoaderTest {
 
     @TestPropertySource("app.yml")
     static class YamlConfig {
+    }
+
+    @TestPropertySource("app.properties")
+    @Configuration
+    static class IntegrationConfig {
+    }
+
+    @TestPropertySource(value = "app.properties", autoRefreshed = true)
+    @Configuration
+    static class IntegrationAutoRefreshConfig {
+    }
+
+    /**
+     * A minimal backend annotation that only declares {@code value}, to verify that the loader
+     * applies defaults for the optional attributes.
+     */
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.RUNTIME)
+    @Inherited
+    @Documented
+    @PropertySourceExtension
+    @Import(MinimalTestPropertySourceLoader.class)
+    @interface MinimalTestPropertySource {
+
+        String[] value() default {};
+    }
+
+    static class MinimalTestPropertySourceLoader extends PropertySourceExtensionLoader<MinimalTestPropertySource> {
+
+        @Override
+        protected Class<MinimalTestPropertySource> getAnnotationType() {
+            return MinimalTestPropertySource.class;
+        }
+
+        @Override
+        protected Resource[] resolveResources(AnnotationAttributes attributes, String propertySourceName,
+                                              String resourceValue) {
+            return new Resource[]{new ClassPathResource(resourceValue)};
+        }
+    }
+
+    @MinimalTestPropertySource("app.properties")
+    @Configuration
+    static class MinimalConfig {
     }
 }
