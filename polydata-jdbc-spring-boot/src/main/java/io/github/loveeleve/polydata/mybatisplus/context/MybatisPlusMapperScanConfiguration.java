@@ -68,7 +68,7 @@ class MybatisPlusMapperScanConfiguration {
                 String typeHandlersPackage = mybatisProperties.getTypeHandlersPackage();
                 DynamicJdbcConfig.MybatisPlus mybatisPlus = dynamicJdbcConfig.getMybatisPlus();
                 String typeEnumsPackage = mybatisPlus.getBasePackages();
-                // 如果包含了架构组的扩展Handle
+                // If the type-handlers package of the architecture group contains extended type handlers
                 if (StringUtils.isNotEmpty(typeHandlersPackage) && StringUtils.contains(typeHandlersPackage, MYBATIS_TYPE_HANDLERS_PACKAGE_VALUE)
                         && StringUtils.isNotEmpty(typeEnumsPackage)) {
                     Set<Class> classes;

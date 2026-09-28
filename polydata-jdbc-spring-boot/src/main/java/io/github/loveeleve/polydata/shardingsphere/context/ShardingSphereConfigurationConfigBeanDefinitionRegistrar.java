@@ -76,16 +76,37 @@ public class ShardingSphereConfigurationConfigBeanDefinitionRegistrar
 
         byte[] yamlContent = loadShardingSphereYamlResource(resourceLoader, configResource);
 
-        Map<String, DataSource> dataSourceMap = createDataSourceMap(dynamicJdbcConfig);
+        Map<String, DataSource> dataSourceMap = new LinkedHashMap<>();
 
-        DataSource dataSource = createShardingSphereDataSource(dataSourceMap, yamlContent, configResource);
+        try {
+            createDataSourceMap(dynamicJdbcConfig, dataSourceMap);
 
-        String beanName = getDataSourceBeanName(configuration);
+            DataSource dataSource = createShardingSphereDataSource(dataSourceMap, yamlContent, configResource);
 
-        registerBean(registry, beanName, dataSource);
+            String beanName = getDataSourceBeanName(configuration);
 
-        logger.info("ShardingSphere[name : {}] DataSource Bean[name : '{}'] was registered from the YAML Config Resource[location : {}]",
-                configuration.getName(), beanName, configResource);
+            registerBean(registry, beanName, dataSource);
+
+            logger.info("ShardingSphere[name : {}] DataSource Bean[name : '{}'] was registered from the YAML Config Resource[location : {}]",
+                    configuration.getName(), beanName, configResource);
+        } catch (RuntimeException e) {
+            // Avoid the physical DataSource(s) leak when the ShardingSphere DataSource can't be
+            // created (e.g. an invalid YAML configuration or an invalid datasource property)
+            closeQuietly(dataSourceMap);
+            throw e;
+        }
+    }
+
+    private void closeQuietly(Map<String, DataSource> dataSourceMap) {
+        dataSourceMap.values().forEach(dataSource -> {
+            if (dataSource instanceof AutoCloseable) {
+                try {
+                    ((AutoCloseable) dataSource).close();
+                } catch (Exception e) {
+                    logger.warn("The DataSource[{}] can't be closed", dataSource, e);
+                }
+            }
+        });
     }
 
     private DataSource createShardingSphereDataSource(Map<String, DataSource> dataSourceMap, byte[] yamlContent,
@@ -98,13 +119,11 @@ public class ShardingSphereConfigurationConfigBeanDefinitionRegistrar
         }
     }
 
-    private Map<String, DataSource> createDataSourceMap(DynamicJdbcConfig dynamicJdbcConfig) {
+    private void createDataSourceMap(DynamicJdbcConfig dynamicJdbcConfig, Map<String, DataSource> dataSourceMap) {
         Map<String, Map<String, String>> dataSourcePropertiesMap = dynamicJdbcConfig.getDataSourcePropertiesMap();
-        Map<String, DataSource> dataSourceMap = new LinkedHashMap<>(dataSourcePropertiesMap.size());
         dataSourcePropertiesMap.forEach((name, dataSourceProperties) -> {
             dataSourceMap.put(name, createDataSource(name, dataSourceProperties));
         });
-        return dataSourceMap;
     }
 
     private DataSource createDataSource(String name, Map<String, String> dataSourceProperties) {

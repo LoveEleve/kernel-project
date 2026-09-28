@@ -89,7 +89,7 @@ class PropagatingDynamicJdbcConfigChangedEventListener implements SmartApplicati
 
     private void onZoneContextChangedEvent(ZoneContextChangedEvent event) {
         if (isZoneChanged(event)) {
-            // Publish DynamicJdbcConfigChangedEvent if the DynamicJdbcConfig has tge High Availability
+            // Publish DynamicJdbcConfigChangedEvent if the DynamicJdbcConfig has the High Availability
             // DataSource
             dynamicJdbcConfigPropertyNames.forEach(propertyName -> {
                 DynamicJdbcConfig dynamicJdbcConfig = getDynamicJdbcConfig(environment, propertyName);

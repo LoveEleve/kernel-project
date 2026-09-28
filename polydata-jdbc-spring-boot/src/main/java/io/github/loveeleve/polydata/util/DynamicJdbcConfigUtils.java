@@ -123,7 +123,7 @@ public abstract class DynamicJdbcConfigUtils {
                                                          Supplier<String> defaultNameSupplier) {
         String dynamicJdbcConfigJsonContent = getDynamicJdbcConfigContent(environment, propertyName);
         DynamicJdbcConfig dynamicJdbcConfig = parseDynamicJdbcConfig(propertyName, dynamicJdbcConfigJsonContent);
-        //如果没有开启动态数据源，强制开启
+        // Force the dynamic flag to be true if it is not enabled
         if (!dynamicJdbcConfig.isDynamic()) {
             logger.warn("Force dynamic true. propertyName: {}", propertyName);
             dynamicJdbcConfig.setDynamic(Boolean.TRUE);

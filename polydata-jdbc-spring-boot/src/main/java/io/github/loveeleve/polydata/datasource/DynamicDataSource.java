@@ -219,6 +219,9 @@ public class DynamicDataSource implements DataSource, InitializingBean, Disposab
     private DataSource getDataSource(ApplicationContext childContext) {
         Map<String, DataSource> dataSourceMap = childContext.getBeansOfType(DataSource.class);
         int size = dataSourceMap.size();
+        if (size < 1) {
+            throw new IllegalStateException(format("No DataSource Bean was found in the {}", childContext.getId()));
+        }
         if (size > 1) {
             throw new IllegalStateException(format("There are {} DataSource Beans[{}] in the {}", size, dataSourceMap, childContext.getId()));
         }
@@ -284,6 +287,10 @@ public class DynamicDataSource implements DataSource, InitializingBean, Disposab
 
     private ConfigurableApplicationContext findParentContext(ConfigurableApplicationContext eventSourceContext) {
         DynamicJdbcChildContext dynamicDataSourceChildContext = this.dynamicDataSourceChildContext;
+        if (dynamicDataSourceChildContext == null) {
+            // The event arrives before the first initialization has been completed
+            return null;
+        }
         ConfigurableApplicationContext parentContext = dynamicDataSourceChildContext.getParentContext();
 
         if (Objects.equals(parentContext, eventSourceContext)) { // Single DynamicJdbcConfig
@@ -306,7 +313,7 @@ public class DynamicDataSource implements DataSource, InitializingBean, Disposab
 
         @Override
         public void onApplicationEvent(DynamicJdbcConfigChangedEvent event) {
-            // 如果配置变更，则重建数据源
+            // Rebuild the DataSource when the configuration is changed
             DynamicJdbcConfig dynamicJdbcConfig = event.getDynamicJdbcConfig();
             String dynamicJdbcConfigPropertyName = event.getPropertyName();
             ConfigurableApplicationContext context = event.getSource();
