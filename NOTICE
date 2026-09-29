@@ -1,0 +1,16 @@
+PolyCache
+Copyright 2026 LoveEleve
+
+This product includes software developed as part of the Microsphere Projects
+(https://github.com/microsphere-projects/microsphere-redis), which is
+licensed under the Apache License, Version 2.0.
+
+The Redis command catalog and the write-command catalog
+(META-INF/redis-commands and META-INF/redis-write-commands) are derived from
+microsphere-redis, as are the concepts of the non-intrusive Redis command
+interception and the Kafka-based cross-datacenter command replication. This
+product is an independent implementation: the interception is rebuilt on
+Redisson (instead of the Spring Data Redis connection proxy), the commands are
+captured from the Netty connection pipeline through the Redisson NettyHook
+with wire-ready argument encoding, the write commands are replicated through
+Kafka and replayed semantically through the Redisson CommandAsyncExecutor.
