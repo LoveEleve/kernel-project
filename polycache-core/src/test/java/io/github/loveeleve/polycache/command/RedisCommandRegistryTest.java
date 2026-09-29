@@ -18,6 +18,8 @@ package io.github.loveeleve.polycache.command;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,5 +64,18 @@ class RedisCommandRegistryTest {
         assertFalse(RedisCommandRegistry.isWriteCommand("GET"));
         assertFalse(RedisCommandRegistry.isWriteCommand("NOT-A-COMMAND"));
         assertFalse(RedisCommandRegistry.isWriteCommand(null));
+    }
+
+    @Test
+    void testCaseInsensitivityIsLocaleIndependent() {
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            // In the Turkish locale, "incr".toUpperCase() produces the dotted capital I
+            Locale.setDefault(new Locale("tr", "TR"));
+            assertTrue(RedisCommandRegistry.isCommand("set"));
+            assertTrue(RedisCommandRegistry.isWriteCommand("incr"));
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 }

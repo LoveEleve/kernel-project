@@ -107,6 +107,18 @@ class PolyCacheAutoConfigurationTest {
     }
 
     @Test
+    void testBlankTopicFailsFast() {
+        contextRunner.withPropertyValues(
+                        "polycache.replication.enabled=true",
+                        "polycache.replication.source=zone-a",
+                        "polycache.replication.consumer.enabled=false",
+                        "polycache.replication.topic=",
+                        "spring.kafka.bootstrap-servers=localhost:9092")
+                .withBean(RedissonClient.class, () -> redissonClient)
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
     void testCaptureAppliedToTheRedissonConfig() {
         contextRunner.withPropertyValues(
                         "polycache.replication.enabled=true",

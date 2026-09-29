@@ -126,12 +126,12 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 测试
 
-35 个测试，全部使用本地进程级真实依赖，无外部服务：
+38 个测试，全部使用本地进程级真实依赖，无外部服务：
 
-- `polycache-core`（9）：命令目录、写命令判定与消息模型单测
-- `polycache-redisson`（13）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离单测 + 双 Redis 端到端（捕获 → 直接重放）
-- `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value）
-- `polycache-spring-boot`（4）：自动装配条件与 Redisson Config 定制
+- `polycache-core`（10）：命令目录、写命令判定（含 Locale 无关性）与消息模型单测
+- `polycache-redisson`（14）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次单测 + 双 Redis 端到端（捕获 → 直接重放）
+- `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value / skipResult 批次）
+- `polycache-spring-boot`（5）：自动装配条件、参数校验与 Redisson Config 定制
 
 ```bash
 ./mvnw test
