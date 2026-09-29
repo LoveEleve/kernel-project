@@ -22,7 +22,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,14 +48,20 @@ public class RedisServer implements AutoCloseable {
     }
 
     public static RedisServer start() throws IOException {
+        return start(List.of());
+    }
+
+    public static RedisServer start(List<String> extraArguments) throws IOException {
         int port = findFreePort();
         Path directory = Files.createTempDirectory("polycache-redis-");
-        ProcessBuilder processBuilder = new ProcessBuilder(
+        List<String> command = new ArrayList<>(List.of(
                 "redis-server",
                 "--port", String.valueOf(port),
                 "--save", "",
                 "--appendonly", "no",
-                "--dir", directory.toString());
+                "--dir", directory.toString()));
+        command.addAll(extraArguments);
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
         Process process = processBuilder.start();
