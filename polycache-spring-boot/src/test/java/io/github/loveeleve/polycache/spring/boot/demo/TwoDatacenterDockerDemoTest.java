@@ -33,6 +33,7 @@ import org.springframework.kafka.test.EmbeddedKafkaKraftBroker;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -232,10 +233,19 @@ class TwoDatacenterDockerDemoTest {
                         "spring.data.redis.port=" + redisPort);
     }
 
+    /**
+     * The containers running with the protected mode enabled accept the connections but reject the
+     * commands, so a protocol level ping is required to decide whether the demo can run.
+     */
     private static boolean canConnect(int port) {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("127.0.0.1", port), 500);
-            return true;
+            socket.setSoTimeout(500);
+            socket.getOutputStream().write("PING\r\n".getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            byte[] response = new byte[64];
+            int read = socket.getInputStream().read(response);
+            return read > 0 && new String(response, 0, read, StandardCharsets.US_ASCII).startsWith("+PONG");
         } catch (IOException e) {
             return false;
         }
