@@ -24,6 +24,7 @@ import org.redisson.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +32,7 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Transparent Redis command interception for Redisson. The capture is installed through
@@ -129,35 +131,34 @@ public class RedisCommandCapture {
     }
 
     void capture(CommandData<?, ?> commandData) {
-        if (!enabled) {
+        RedisCommandMessage message = message(commandData);
+        if (message == null) {
             return;
         }
-        String commandName = commandData.getCommand().getName();
-        if (!commandFilter.test(commandName)) {
-            return;
-        }
-        RedisCommandMessage message = RedisCommandMessages.message(commandName, commandData.getParams(), source);
         CompletableFuture<?> promise = commandData.getPromise();
         if (promise == null) {
             publish(message);
             return;
         }
-        if (!capturedPromises.add(promise)) {
-            // The command was already captured, e.g. it was retried after a connection failure
-            return;
-        }
-        // The command is replicated only when it was executed successfully
-        promise.whenComplete((result, error) -> {
-            if (error == null) {
-                publish(message);
-            } else {
-                logger.debug("The Redis command [{}] was not replicated because of : {}", commandName, error.getMessage());
-            }
-        });
+        captureOnCompletion(promise, List.of(message));
     }
 
     void capture(CommandsData commandsData) {
         if (!enabled) {
+            return;
+        }
+        if (commandsData.isSkipResult()) {
+            // With a batch executed with skipResult, Redisson does not complete the promises of the
+            // inner commands, so they are published when the whole batch completes
+            List<RedisCommandMessage> messages = new ArrayList<>();
+            collectMessages(commandsData.getCommands(), messages);
+            collectMessages(commandsData.getAttachedCommands(), messages);
+            CompletableFuture<?> promise = commandsData.getPromise();
+            if (promise == null) {
+                messages.forEach(this::publish);
+            } else {
+                captureOnCompletion(promise, messages);
+            }
             return;
         }
         List<CommandData<?, ?>> commands = commandsData.getCommands();
@@ -168,6 +169,49 @@ public class RedisCommandCapture {
         if (attachedCommands != null) {
             attachedCommands.forEach(this::capture);
         }
+    }
+
+    private RedisCommandMessage message(CommandData<?, ?> commandData) {
+        if (!enabled) {
+            return null;
+        }
+        String commandName = commandData.getCommand().getName();
+        if (!commandFilter.test(commandName)) {
+            return null;
+        }
+        return RedisCommandMessages.message(commandName, commandData.getParams(), source);
+    }
+
+    private void collectMessages(List<CommandData<?, ?>> commands, List<RedisCommandMessage> messages) {
+        if (commands == null) {
+            return;
+        }
+        for (CommandData<?, ?> command : commands) {
+            RedisCommandMessage message = message(command);
+            if (message != null) {
+                messages.add(message);
+            }
+        }
+    }
+
+    private void captureOnCompletion(CompletableFuture<?> promise, List<RedisCommandMessage> messages) {
+        if (messages.isEmpty()) {
+            return;
+        }
+        if (!capturedPromises.add(promise)) {
+            // The command(s) were already captured, e.g. they were retried after a connection failure
+            return;
+        }
+        // The command is replicated only when it was executed successfully
+        promise.whenComplete((result, error) -> {
+            if (error == null) {
+                messages.forEach(this::publish);
+            } else {
+                logger.debug("The Redis command(s) [{}] were not replicated because of : {}",
+                        messages.stream().map(RedisCommandMessage::getCommandName).collect(Collectors.joining(",")),
+                        error.getMessage());
+            }
+        });
     }
 
     private void publish(RedisCommandMessage message) {

@@ -21,6 +21,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import org.junit.jupiter.api.Test;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.client.protocol.CommandData;
+import org.redisson.client.protocol.CommandsData;
 import org.redisson.client.protocol.RedisCommand;
 
 import java.util.List;
@@ -100,8 +101,32 @@ class RedisCommandCaptureTest {
                 .build();
     }
 
+    /**
+     * With a batch executed with {@code skipResult}, Redisson does not complete the promises of the
+     * inner commands, so the commands must be published when the batch completes.
+     */
+    @Test
+    void testSkipResultBatchIsCapturedOnBatchCompletion() {
+        List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+        RedisCommandCapture capture = capture(messages);
+
+        CompletableFuture<Void> batchPromise = new CompletableFuture<>();
+        CommandData<?, ?> innerClient = commandData(new CompletableFuture<>(), "CLIENT", "REPLY", "OFF");
+        CommandData<?, ?> innerSet = commandData(new CompletableFuture<>(), "SET", "skip:1", "value");
+        CommandsData commandsData = new CommandsData(batchPromise, List.of(innerClient, innerSet),
+                true, false, false, false);
+
+        capture.capture(commandsData);
+        assertTrue(messages.isEmpty());
+
+        batchPromise.complete(null);
+        assertEquals(1, messages.size());
+        assertEquals("SET", messages.get(0).getCommandName());
+        assertEquals("skip:1", messages.get(0).getKey());
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static CommandData commandData(CompletableFuture<Object> promise, String commandName, Object... params) {
+    private static CommandData<?, ?> commandData(CompletableFuture<Object> promise, String commandName, Object... params) {
         return new CommandData(promise, StringCodec.INSTANCE, new RedisCommand<>(commandName), params);
     }
 

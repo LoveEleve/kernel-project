@@ -28,6 +28,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.redisson.Redisson;
+import org.redisson.api.BatchOptions;
+import org.redisson.api.RBatch;
 import org.redisson.api.RList;
 import org.redisson.api.RMap;
 import org.redisson.api.RSet;
@@ -116,6 +118,11 @@ class KafkaReplicationE2ETest {
                 hash.putAll(Map.of("f2", "v2", "f3", "v3"));
                 sourceClient.getBucket("ttl:1").set("value", Duration.ofMinutes(1));
                 sourceClient.getBucket("large:1").set("x".repeat(100_000));
+                // A batch with the results skipped is captured through the batch promise
+                RBatch skipResultBatch = sourceClient.createBatch(BatchOptions.defaults().skipResult());
+                skipResultBatch.getBucket("skip:1").setAsync("skip-value");
+                skipResultBatch.getSet("skip:2").addAsync("skip-element");
+                skipResultBatch.execute();
 
                 awaitUntil(() -> "alice".equals(targetClient.getBucket("user:1").get()));
                 assertEquals("bob", targetClient.getMap("map:1").get("name"));
@@ -132,6 +139,8 @@ class KafkaReplicationE2ETest {
                 assertTrue(targetClient.getBucket("ttl:1").remainTimeToLive() > 0);
                 awaitUntil(() -> targetClient.getBucket("large:1").get() != null);
                 assertEquals(100_000, ((String) targetClient.getBucket("large:1").get()).length());
+                awaitUntil(() -> "skip-value".equals(targetClient.getBucket("skip:1").get()));
+                assertTrue(targetClient.getSet("skip:2").contains("skip-element"));
                 assertEquals(0L, producer.getDroppedMessageCount());
             } finally {
                 consumer.close();
