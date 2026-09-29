@@ -37,6 +37,9 @@ import java.util.concurrent.ExecutionException;
  * <p>The messages produced by the local source (the same {@code source} as this consumer) are
  * skipped, so a data center never re-applies its own writes.
  *
+ * <p>The consumer factory should configure {@code auto.offset.reset=earliest}, otherwise the
+ * commands produced before this consumer started (or during a rebalance) are silently lost.
+ *
  * <h3>Example Usage</h3>
  * <pre>{@code
  *   ConsumerFactory<String, RedisCommandMessage> consumerFactory = new DefaultKafkaConsumerFactory<>(configs);

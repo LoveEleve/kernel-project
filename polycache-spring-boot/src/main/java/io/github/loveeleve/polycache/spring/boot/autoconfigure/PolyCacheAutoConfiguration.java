@@ -26,7 +26,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
+import org.redisson.config.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -57,6 +61,7 @@ import java.util.Map;
  * @since 1.0.0
  */
 @AutoConfiguration(afterName = {
+        "org.redisson.spring.starter.RedissonAutoConfigurationV2",
         "org.redisson.spring.starter.RedissonAutoConfiguration",
         "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"})
 @ConditionalOnClass({RedissonClient.class, KafkaTemplate.class})
@@ -64,11 +69,24 @@ import java.util.Map;
 @EnableConfigurationProperties(PolyCacheProperties.class)
 public class PolyCacheAutoConfiguration {
 
-    @Bean
+    private static final Logger logger = LoggerFactory.getLogger(PolyCacheAutoConfiguration.class);
+
+    @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     @ConditionalOnBean(RedissonClient.class)
-    public RedisCommandReplayer redisCommandReplayer(RedissonClient redissonClient) {
-        return new RedisCommandReplayer(redissonClient);
+    public RedisCommandReplayer redisCommandReplayer(RedissonClient applicationClient,
+                                                     ObjectProvider<PolyCacheRedissonConfigHolder> configHolderProvider) {
+        PolyCacheRedissonConfigHolder configHolder = configHolderProvider.getIfAvailable();
+        Config replayConfig = configHolder == null ? null : configHolder.getReplayConfig();
+        if (replayConfig == null) {
+            // Without the Redisson Spring Boot starter, no Config can be captured : the application
+            // client is used, it must not have the capture installed, otherwise the replication loops
+            logger.warn("No Redisson configuration was captured, the commands are replayed through the application "
+                    + "RedissonClient; make sure that it does not capture the commands, otherwise the replication would loop");
+            return new RedisCommandReplayer(applicationClient);
+        }
+        // The dedicated replay client does not capture the commands, it is shut down with the replayer
+        return new RedisCommandReplayer(Redisson.create(replayConfig), true);
     }
 
     @Bean
@@ -106,13 +124,16 @@ public class PolyCacheAutoConfiguration {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, RedisCommandMessageDeserializer.class);
         configs.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
+        // Without an initial offset, the consumer must read the commands produced before it started,
+        // otherwise the commands produced during the startup/rebalance window are silently lost
+        configs.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaRedisCommandConsumer(new DefaultKafkaConsumerFactory<>(configs), properties.getTopic(),
                 properties.getSource(), replayer);
     }
 
     /**
      * Applies the capture to the Redisson {@code Config} auto-configured by the Redisson Spring
-     * Boot starter.
+     * Boot starter, and captures the configuration of the dedicated replay client.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = "org.redisson.spring.starter.RedissonAutoConfigurationCustomizer")
@@ -120,8 +141,14 @@ public class PolyCacheAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
-        public org.redisson.spring.starter.RedissonAutoConfigurationCustomizer polyCacheRedissonAutoConfigurationCustomizer(RedisCommandCapture capture) {
-            return capture::applyTo;
+        PolyCacheRedissonConfigHolder polyCacheRedissonConfigHolder(RedisCommandCapture capture) {
+            return new PolyCacheRedissonConfigHolder(capture);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public org.redisson.spring.starter.RedissonAutoConfigurationCustomizer polyCacheRedissonAutoConfigurationCustomizer(PolyCacheRedissonConfigHolder configHolder) {
+            return configHolder;
         }
     }
 }

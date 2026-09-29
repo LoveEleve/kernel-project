@@ -53,7 +53,7 @@ import java.util.concurrent.CompletableFuture;
  * @author <a href="https://github.com/LoveEleve">LoveEleve</a>
  * @since 1.0.0
  */
-public class RedisCommandReplayer {
+public class RedisCommandReplayer implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisCommandReplayer.class);
 
@@ -66,16 +66,44 @@ public class RedisCommandReplayer {
     private static final Set<String> BLOCKING_COMMANDS = Set.of(
             "BLPOP", "BRPOP", "BLMOVE", "BLMPOP", "BRPOPLPUSH", "BZPOPMIN", "BZPOPMAX", "BZMPOP");
 
+    private final RedissonClient redissonClient;
+
     private final CommandAsyncExecutor commandExecutor;
+
+    private final boolean shutdownClientOnClose;
 
     /**
      * @param redissonClient the target client of the replay
      */
     public RedisCommandReplayer(RedissonClient redissonClient) {
+        this(redissonClient, false);
+    }
+
+    /**
+     * @param redissonClient        the target client of the replay
+     * @param shutdownClientOnClose whether the client is shut down when this replayer is closed
+     */
+    public RedisCommandReplayer(RedissonClient redissonClient, boolean shutdownClientOnClose) {
         if (!(redissonClient instanceof Redisson)) {
             throw new IllegalArgumentException("The RedissonClient must be an instance of " + Redisson.class.getName());
         }
+        this.redissonClient = redissonClient;
         this.commandExecutor = ((Redisson) redissonClient).getCommandExecutor();
+        this.shutdownClientOnClose = shutdownClientOnClose;
+    }
+
+    /**
+     * @return the target client of the replay
+     */
+    public RedissonClient getRedissonClient() {
+        return redissonClient;
+    }
+
+    @Override
+    public void close() {
+        if (shutdownClientOnClose) {
+            ((Redisson) redissonClient).shutdown();
+        }
     }
 
     /**

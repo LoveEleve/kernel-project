@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
+import org.redisson.spring.starter.RedissonAutoConfigurationV2;
 import org.redisson.spring.starter.RedissonAutoConfigurationCustomizer;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
@@ -104,6 +105,34 @@ class PolyCacheAutoConfigurationTest {
                         "spring.kafka.bootstrap-servers=localhost:9092")
                 .withBean(RedissonClient.class, () -> redissonClient)
                 .run(context -> assertThat(context).hasSingleBean(KafkaRedisCommandConsumer.class));
+    }
+
+    @Test
+    void testReplayClientIsDedicatedWithTheRedissonStarter() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(KafkaAutoConfiguration.class,
+                        RedissonAutoConfigurationV2.class, PolyCacheAutoConfiguration.class))
+                .withPropertyValues(
+                        "polycache.replication.enabled=true",
+                        "polycache.replication.source=zone-a",
+                        "polycache.replication.consumer.enabled=false",
+                        "spring.kafka.bootstrap-servers=localhost:9092",
+                        "spring.data.redis.host=127.0.0.1",
+                        "spring.data.redis.port=" + redisServer.getPort())
+                .run(context -> {
+                    assertThat(context).hasSingleBean(RedisCommandCapture.class);
+                    RedissonClient applicationClient = context.getBean(RedissonClient.class);
+                    RedisCommandReplayer replayer = context.getBean(RedisCommandReplayer.class);
+                    // The replay client is a dedicated client, not the captured application client
+                    assertThat(replayer.getRedissonClient()).isNotSameAs(applicationClient);
+                    assertThat(replayer.getRedissonClient().isShutdown()).isFalse();
+                    // The configuration of the replay client does not capture the commands
+                    PolyCacheRedissonConfigHolder configHolder = context.getBean(PolyCacheRedissonConfigHolder.class);
+                    Config customizedConfig = new Config();
+                    configHolder.customize(customizedConfig);
+                    assertThat(customizedConfig.getNettyHook()).isNotNull();
+                    assertThat(configHolder.getReplayConfig().getNettyHook()).isNotSameAs(customizedConfig.getNettyHook());
+                });
     }
 
     @Test

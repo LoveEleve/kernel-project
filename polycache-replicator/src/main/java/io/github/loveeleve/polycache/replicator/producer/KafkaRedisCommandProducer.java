@@ -67,6 +67,8 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
 
     private final BlockingQueue<RedisCommandMessage> sendingQueue;
 
+    private final AtomicLong sentMessageCount = new AtomicLong();
+
     private final AtomicLong droppedMessageCount = new AtomicLong();
 
     private final Thread senderThread;
@@ -104,6 +106,13 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
     }
 
     /**
+     * @return the number of the messages sent to Kafka successfully
+     */
+    public long getSentMessageCount() {
+        return sentMessageCount.get();
+    }
+
+    /**
      * @return the number of the dropped messages due to the full sending queue
      */
     public long getDroppedMessageCount() {
@@ -134,6 +143,7 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
                             logger.warn("Failed to send the Redis command [{}] of the source [{}] to the topic [{}]",
                                     message.getCommandName(), message.getSource(), topic, error);
                         } else {
+                            sentMessageCount.incrementAndGet();
                             logger.debug("The Redis command [{}] was sent to the topic [{}]", message.getCommandName(), topic);
                         }
                     });

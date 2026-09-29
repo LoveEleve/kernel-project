@@ -37,8 +37,8 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 失败不复制 | 命令只有执行成功后才发布到 Kafka，失败（如 WRONGTYPE）不会污染其它机房；Netty 写重试不会导致重复发布 |
 | 捕获零影响 | 捕获发生在连接管线上，任何捕获异常都会被隔离并告警，绝不影响 Redis 命令本身的执行 |
 | 保序与背压 | 生产者用单线程队列按 key 分区发送，队列满时丢弃并计数，绝不阻塞 Netty 事件循环；消费端逐条等待重放完成，同一分区按序落地 |
-| 至少一次复制 | 消费端在重放完成后才提交偏移；重放失败重试 3 次（间隔 1s），仍失败则告警并跳过，不会在崩溃窗口静默丢失 |
-| 防回环 | 消息携带 `source`，消费端跳过本地机房的写入；重放客户端不安装拦截，天然不会二次复制 |
+| 至少一次复制 | 消费端在重放完成后才提交偏移；默认从 `earliest` 开始消费（启动/重平衡窗口不丢命令）；重放失败重试 3 次（间隔 1s），仍失败则告警并跳过 |
+| 防回环 | 消息携带 `source`，消费端跳过本地机房的写入；Spring Boot 自动装配为重放创建专用 Redisson 客户端（克隆配置、不安装捕获），重放写不会被再次捕获，手动装配时重放客户端同样不得安装捕获 |
 | Spring Boot 集成 | 自动装配生产者/消费者/重放器，Redisson Spring Boot Starter 在场时自动把拦截应用到自动配置的 `Config` |
 
 ## 模块
@@ -126,12 +126,12 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 测试
 
-38 个测试，全部使用本地进程级真实依赖，无外部服务：
+40 个测试，全部使用本地进程级真实依赖，无外部服务（Redis 为本地 `redis-server` 进程，Kafka 为 Embedded Broker）：
 
 - `polycache-core`（10）：命令目录、写命令判定（含 Locale 无关性）与消息模型单测
 - `polycache-redisson`（14）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次单测 + 双 Redis 端到端（捕获 → 直接重放）
 - `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value / skipResult 批次）
-- `polycache-spring-boot`（5）：自动装配条件、参数校验与 Redisson Config 定制
+- `polycache-spring-boot`（7）：自动装配条件、参数校验、Redisson Config 定制 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）
 
 ```bash
 ./mvnw test
