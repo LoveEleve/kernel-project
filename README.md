@@ -128,16 +128,47 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 测试
 
-48 个测试，全部使用本地进程级真实依赖，无外部服务（Redis 为本地 `redis-server` 进程，Kafka 为 Embedded Broker）：
+49 个测试，全部使用进程级真实依赖（Redis 为本地 `redis-server` 进程或 Docker 容器，Kafka 为 Embedded Broker）：
 
 - `polycache-core`（10）：命令目录、写命令判定（含 Locale 无关性）与消息模型单测
 - `polycache-redisson`（22）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次 / 脚本注册表与 EVALSHA→EVAL 转换单测 + 双 Redis 端到端（含 `useScriptCache` 场景）+ 3 节点真集群双向端到端 + 多线程并发捕获
 - `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value / skipResult 批次）
-- `polycache-spring-boot`（7）：自动装配条件、参数校验、Redisson Config 定制 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）
+- `polycache-spring-boot`（8）：自动装配条件、参数校验、Redisson Config 定制 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）+ Docker 双机房演示（容器不可达时自动跳过）
 
 ```bash
 ./mvnw test
 ```
+
+## 手工演示（Docker 双机房）
+
+仓库内附带一个可运行的双机房演示：两个应用上下文分别连接两个 Redis 实例，通过嵌入式 Kafka 互相同步，并校验无复制回环。
+
+```bash
+# 1. 准备两个 Redis 实例（示例，任意两个实例均可）
+docker run -d --name redis-lab-7 -p 16379:6379 redis:7
+docker run -d --name redis-lab-8 -p 16388:6379 redis:8
+
+# 2. 容器默认保护模式会拒绝宿主机连接，演示前关闭（运行时生效，可随时改回）
+docker exec redis-lab-7 redis-cli config set protected-mode no
+docker exec redis-lab-8 redis-cli config set protected-mode no
+
+# 3. 运行演示（端口可用 -Dpolycache.demo.redis-a.port / -Dpolycache.demo.redis-b.port 覆盖）
+./mvnw test -pl polycache-spring-boot -am -Dtest=TwoDatacenterDockerDemoTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+输出示例：
+
+```
+[1] 两个机房各写入 6 条写命令（SET / EVAL / INCR / 批量 / 顺序）
+[2] 等待跨机房同步 ...
+    机房 B 已收到 A 的全部写入 ✓
+    机房 A 已收到 B 的全部写入 ✓
+[3] 复制回环检查：A 出站 6 条 / B 出站 6 条（与写入次数一致，无回环）✓
+...
+演示通过 ✓
+```
+
+演示使用 `polycache-demo:` 前缀并在结束后清理自身数据；容器不可达时测试自动跳过。
 
 ## 与 microsphere-redis 的关系
 
