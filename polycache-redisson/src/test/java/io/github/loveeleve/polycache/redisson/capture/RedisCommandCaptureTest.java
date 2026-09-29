@@ -24,10 +24,13 @@ import org.redisson.client.protocol.CommandData;
 import org.redisson.client.protocol.CommandsData;
 import org.redisson.client.protocol.RedisCommand;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -101,6 +104,43 @@ class RedisCommandCaptureTest {
                 .build();
     }
 
+    @Test
+    void testEvalshaIsTranslatedToEval() throws Exception {
+        List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+        RedisCommandCapture capture = capture(messages);
+        String script = "return redis.call('get', KEYS[1])";
+        String sha = sha1(script);
+
+        CompletableFuture<Object> loadPromise = new CompletableFuture<>();
+        capture.capture(scriptLoadCommandData(loadPromise, script));
+        loadPromise.complete(null);
+        // The SCRIPT LOAD command is not replicated, it only feeds the script registry
+        assertTrue(messages.isEmpty());
+
+        CompletableFuture<Object> evalshaPromise = new CompletableFuture<>();
+        capture.capture(commandData(evalshaPromise, "EVALSHA", sha, 1, "map:1", "arg"));
+        evalshaPromise.complete(null);
+
+        assertEquals(1, messages.size());
+        RedisCommandMessage message = messages.get(0);
+        assertEquals("EVAL", message.getCommandName());
+        assertArrayEquals(script.getBytes(StandardCharsets.UTF_8), message.getArgs()[0]);
+        assertEquals("map:1", message.getKey());
+    }
+
+    @Test
+    void testUnknownEvalshaIsCapturedAsIs() {
+        List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+        RedisCommandCapture capture = capture(messages);
+
+        CompletableFuture<Object> evalshaPromise = new CompletableFuture<>();
+        capture.capture(commandData(evalshaPromise, "EVALSHA", "unknown-sha", 1, "map:1"));
+        evalshaPromise.complete(null);
+
+        assertEquals(1, messages.size());
+        assertEquals("EVALSHA", messages.get(0).getCommandName());
+    }
+
     /**
      * With a batch executed with {@code skipResult}, Redisson does not complete the promises of the
      * inner commands, so the commands must be published when the batch completes.
@@ -128,6 +168,20 @@ class RedisCommandCaptureTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static CommandData<?, ?> commandData(CompletableFuture<Object> promise, String commandName, Object... params) {
         return new CommandData(promise, StringCodec.INSTANCE, new RedisCommand<>(commandName), params);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static CommandData<?, ?> scriptLoadCommandData(CompletableFuture<Object> promise, String script) {
+        return new CommandData(promise, StringCodec.INSTANCE, new RedisCommand<>("SCRIPT", "LOAD"), new Object[]{script});
+    }
+
+    private static String sha1(String script) throws Exception {
+        byte[] digest = MessageDigest.getInstance("SHA-1").digest(script.getBytes(StandardCharsets.UTF_8));
+        StringBuilder hex = new StringBuilder(digest.length * 2);
+        for (byte b : digest) {
+            hex.append(String.format("%02x", b));
+        }
+        return hex.toString();
     }
 
     /**

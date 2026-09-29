@@ -20,6 +20,7 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
 import io.github.loveeleve.polycache.command.RedisCommandRegistry;
 import org.redisson.client.protocol.CommandData;
 import org.redisson.client.protocol.CommandsData;
+import org.redisson.client.protocol.RedisCommand;
 import org.redisson.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,14 @@ import java.util.stream.Collectors;
 public class RedisCommandCapture {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisCommandCapture.class);
+
+    private static final String SCRIPT = "SCRIPT";
+
+    private static final String SCRIPT_LOAD = "LOAD";
+
+    private static final String EVAL = "EVAL";
+
+    private static final String EVALSHA = "EVALSHA";
 
     private final String source;
 
@@ -175,11 +184,40 @@ public class RedisCommandCapture {
         if (!enabled) {
             return null;
         }
-        String commandName = commandData.getCommand().getName();
+        RedisCommand<?> command = commandData.getCommand();
+        String commandName = command.getName();
+        Object[] params = commandData.getParams();
+        if (isScriptLoad(command)) {
+            // The SCRIPT LOAD command is not replicated itself, but the script is recorded so that
+            // the EVALSHA commands can be replicated transparently as EVAL
+            RedisScripts.register(firstParam(params));
+            return null;
+        }
         if (!commandFilter.test(commandName)) {
             return null;
         }
-        return RedisCommandMessages.message(commandName, commandData.getParams(), source);
+        if (EVALSHA.equals(commandName)) {
+            byte[] script = RedisScripts.find(firstParam(params));
+            if (script != null) {
+                return RedisCommandMessages.message(EVAL, evalshaToEvalParams(script, params), source);
+            }
+        }
+        return RedisCommandMessages.message(commandName, params, source);
+    }
+
+    private static boolean isScriptLoad(RedisCommand<?> command) {
+        return SCRIPT.equals(command.getName()) && SCRIPT_LOAD.equals(command.getSubName());
+    }
+
+    private static Object firstParam(Object[] params) {
+        return params == null || params.length == 0 ? null : params[0];
+    }
+
+    private static Object[] evalshaToEvalParams(byte[] script, Object[] params) {
+        Object[] evalParams = new Object[params.length];
+        evalParams[0] = script;
+        System.arraycopy(params, 1, evalParams, 1, params.length - 1);
+        return evalParams;
     }
 
     private void collectMessages(List<CommandData<?, ?>> commands, List<RedisCommandMessage> messages) {

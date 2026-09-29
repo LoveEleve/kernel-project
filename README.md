@@ -34,6 +34,7 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 命令级捕获 | 命令名 + 参数在 codec 编码完成后被捕获（wire-ready），与源端的序列化器实例无关 |
 | 写命令过滤 | 基于 Redis 官方命令目录与 `ACL CAT write` 写命令目录；另外把 `EVAL` / `EVALSHA` 视为写命令，覆盖 Redisson 内部 Lua 脚本实现的操作 |
 | 语义重放 | 消费端用 `ByteArrayCodec` 把参数原样提交给目标 Redisson 的 `CommandAsyncExecutor`，响应由宽松解码器消费，不依赖业务序列化器 |
+| 脚本透明转换 | 捕获层从 `SCRIPT LOAD` 学习脚本体（SHA1 索引、LRU 上限 1024），把 `EVALSHA` 复制为携带脚本的 `EVAL`，重放不依赖对端 Redis 的脚本缓存 |
 | 失败不复制 | 命令只有执行成功后才发布到 Kafka，失败（如 WRONGTYPE）不会污染其它机房；Netty 写重试不会导致重复发布 |
 | 捕获零影响 | 捕获发生在连接管线上，任何捕获异常都会被隔离并告警，绝不影响 Redis 命令本身的执行 |
 | 保序与背压 | 生产者用单线程队列按 key 分区发送，队列满时丢弃并计数，绝不阻塞 Netty 事件循环；消费端逐条等待重放完成，同一分区按序落地 |
@@ -117,7 +118,7 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 - **最终一致性**：复制是异步的，源机房写入成功与其它机房可见之间存在延迟；崩溃重叠窗口内可能出现重复应用（至少一次语义），幂等命令无影响，`INCR` 等非幂等命令需业务侧评估。
 - **`EVAL` 脚本假设确定性**：以脚本原文复制，脚本内使用时间/随机数的写法不保证多机房结果一致；Redisson 内部脚本（如 `RMap.put`）是确定性的。
-- **`EVALSHA` 需要远端已缓存脚本**：未缓存的 SHA 重放会得到 `NOSCRIPT`，生产建议让重放端使用 `EVAL` 路径的客户端配置。
+- **`EVALSHA` 的边界**：捕获层会用观察到的 `SCRIPT LOAD` 把 `EVALSHA` 透明转换为 `EVAL`；若脚本在本进程启动前就已加载（捕获未观察到 `SCRIPT LOAD`），则按 `EVALSHA` 原样复制，对端未缓存时会得到 `NOSCRIPT` 并告警。
 - **无 key 命令会被跳过**（如 `FLUSHDB`）：消息以 key 作为分区与路由依据，没有 key 无法定位到目标节点，消费端会告警并跳过。
 - **阻塞命令会被跳过**（`BLPOP` / `BRPOP` / `BZPOPMIN` / `BLMPOP` 等）：重放阻塞命令会再次弹出元素并长期占用连接，语义无法安全还原，消费端会告警并跳过。
 - **源端并发顺序**：捕获的是命令提交到 Redisson 连接的顺序；同一 key 的并发写入在不同连接之间没有全局顺序（与 Redis 本身的多连接行为一致）。
@@ -126,10 +127,10 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 测试
 
-40 个测试，全部使用本地进程级真实依赖，无外部服务（Redis 为本地 `redis-server` 进程，Kafka 为 Embedded Broker）：
+45 个测试，全部使用本地进程级真实依赖，无外部服务（Redis 为本地 `redis-server` 进程，Kafka 为 Embedded Broker）：
 
 - `polycache-core`（10）：命令目录、写命令判定（含 Locale 无关性）与消息模型单测
-- `polycache-redisson`（14）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次单测 + 双 Redis 端到端（捕获 → 直接重放）
+- `polycache-redisson`（19）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次 / 脚本注册表与 EVALSHA→EVAL 转换单测 + 双 Redis 端到端（含 `useScriptCache` 场景）
 - `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value / skipResult 批次）
 - `polycache-spring-boot`（7）：自动装配条件、参数校验、Redisson Config 定制 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）
 

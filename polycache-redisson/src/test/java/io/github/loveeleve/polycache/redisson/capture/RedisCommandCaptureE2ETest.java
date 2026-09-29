@@ -46,6 +46,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RedisCommandCaptureE2ETest {
 
+    /**
+     * With the script cache enabled, Redisson sends {@code SCRIPT LOAD} and {@code EVALSHA}: the
+     * capture must replicate the commands as {@code EVAL} with the script body, so the replay does
+     * not depend on the script cache of the target Redis.
+     */
+    @Test
+    void testCaptureAndReplayWithScriptCache() throws Exception {
+        try (RedisServer sourceServer = RedisServer.start();
+             RedisServer targetServer = RedisServer.start()) {
+
+            RedissonClient targetClient = Redisson.create(config(targetServer));
+            RedisCommandReplayer replayer = new RedisCommandReplayer(targetClient);
+
+            List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+            RedisCommandCapture capture = RedisCommandCapture.builder()
+                    .source("zone-a")
+                    .listener(message -> {
+                        messages.add(message);
+                        replayer.replay(message);
+                    })
+                    .build();
+
+            Config sourceConfig = config(sourceServer);
+            sourceConfig.setUseScriptCache(true);
+            capture.applyTo(sourceConfig);
+            RedissonClient sourceClient = Redisson.create(sourceConfig);
+            try {
+                RMap<String, String> map = sourceClient.getMap("map:1");
+                map.put("name", "bob");
+                map.put("city", "paris");
+
+                awaitUntil(() -> "bob".equals(targetClient.getMap("map:1").get("name")));
+                assertEquals("paris", targetClient.getMap("map:1").get("city"));
+
+                // The EVALSHA commands were translated into EVAL, the SCRIPT LOAD was not replicated
+                assertTrue(messages.stream().anyMatch(message -> "EVAL".equals(message.getCommandName())));
+                assertTrue(messages.stream().noneMatch(message -> "EVALSHA".equals(message.getCommandName())));
+                assertTrue(messages.stream().noneMatch(message -> "SCRIPT".equals(message.getCommandName())));
+            } finally {
+                sourceClient.shutdown();
+                targetClient.shutdown();
+            }
+        }
+    }
+
     @Test
     void testCaptureAndReplay() throws Exception {
         try (RedisServer sourceServer = RedisServer.start();
