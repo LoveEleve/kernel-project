@@ -15,7 +15,7 @@
     <packaging>jar</packaging>
 
     <name>PolyCache :: Core</name>
-    <description>PolyCache Core - Redis command metadata and utilities</description>
+    <description>PolyCache Core - Redis command catalog and the replication message model</description>
 
     <dependencies>
         <!-- SLF4J -->

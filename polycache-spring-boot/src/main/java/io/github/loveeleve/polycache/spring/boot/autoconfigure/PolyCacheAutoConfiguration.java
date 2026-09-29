@@ -56,7 +56,9 @@ import java.util.Map;
  * @author <a href="https://github.com/LoveEleve">LoveEleve</a>
  * @since 1.0.0
  */
-@AutoConfiguration(afterName = "org.redisson.spring.starter.RedissonAutoConfiguration")
+@AutoConfiguration(afterName = {
+        "org.redisson.spring.starter.RedissonAutoConfiguration",
+        "org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"})
 @ConditionalOnClass({RedissonClient.class, KafkaTemplate.class})
 @ConditionalOnProperty(prefix = PolyCacheProperties.PREFIX, name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(PolyCacheProperties.class)
@@ -73,10 +75,12 @@ public class PolyCacheAutoConfiguration {
     @ConditionalOnMissingBean
     public KafkaRedisCommandProducer kafkaRedisCommandProducer(KafkaProperties kafkaProperties, ObjectProvider<SslBundles> sslBundles,
                                                                PolyCacheProperties properties) {
+        String topic = properties.getTopic();
+        Assert.hasText(topic, "The property [" + PolyCacheProperties.PREFIX + ".topic] must not be empty");
         Map<String, Object> configs = kafkaProperties.buildProducerProperties(sslBundles.getIfAvailable());
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, RedisCommandMessageSerializer.class);
-        return new KafkaRedisCommandProducer(new DefaultKafkaProducerFactory<>(configs), properties.getTopic());
+        return new KafkaRedisCommandProducer(new DefaultKafkaProducerFactory<>(configs), topic);
     }
 
     @Bean
@@ -96,10 +100,12 @@ public class PolyCacheAutoConfiguration {
     @ConditionalOnProperty(prefix = PolyCacheProperties.PREFIX + ".consumer", name = "enabled", havingValue = "true", matchIfMissing = true)
     public KafkaRedisCommandConsumer kafkaRedisCommandConsumer(KafkaProperties kafkaProperties, ObjectProvider<SslBundles> sslBundles,
                                                                RedisCommandReplayer replayer, PolyCacheProperties properties) {
+        String consumerGroup = properties.getConsumerGroup();
+        Assert.hasText(consumerGroup, "The property [" + PolyCacheProperties.PREFIX + ".consumer-group] must not be empty");
         Map<String, Object> configs = kafkaProperties.buildConsumerProperties(sslBundles.getIfAvailable());
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, RedisCommandMessageDeserializer.class);
-        configs.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, properties.getConsumerGroup());
+        configs.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
         return new KafkaRedisCommandConsumer(new DefaultKafkaConsumerFactory<>(configs), properties.getTopic(),
                 properties.getSource(), replayer);
     }

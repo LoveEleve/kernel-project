@@ -19,6 +19,10 @@ package io.github.loveeleve.polycache.replicator.serialization;
 import io.github.loveeleve.polycache.command.RedisCommandMessage;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,6 +82,47 @@ class RedisCommandMessageCodecTest {
         assertEquals(message, deserializer.deserialize("topic", serializer.serialize("topic", message)));
         assertNull(serializer.serialize("topic", null));
         assertNull(deserializer.deserialize("topic", null));
+    }
+
+    @Test
+    void testRoundTripWithLargeKey() {
+        // A Redis key may exceed the 64KB limit of DataOutputStream#writeUTF
+        String largeKey = "key:".repeat(20_000);
+        RedisCommandMessage message = RedisCommandMessage.builder()
+                .commandName("SET")
+                .args(new byte[][]{largeKey.getBytes(StandardCharsets.UTF_8), bytes("alice")})
+                .key(largeKey)
+                .source("zone-a")
+                .timestamp(1L)
+                .build();
+
+        assertEquals(message, RedisCommandMessageCodec.decode(RedisCommandMessageCodec.encode(message)));
+    }
+
+    @Test
+    void testDecodeCorruptedArgumentCount() throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try (DataOutputStream outputStream = new DataOutputStream(byteArrayOutputStream)) {
+            outputStream.writeByte(RedisCommandMessageCodec.VERSION);
+            outputStream.writeInt(3);
+            outputStream.write(bytes("SET"));
+            outputStream.writeInt(-5);
+        }
+        assertThrows(UncheckedIOException.class, () -> RedisCommandMessageCodec.decode(byteArrayOutputStream.toByteArray()));
+    }
+
+    @Test
+    void testDecodeCorruptedArgumentLength() throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        try (DataOutputStream outputStream = new DataOutputStream(byteArrayOutputStream)) {
+            outputStream.writeByte(RedisCommandMessageCodec.VERSION);
+            outputStream.writeInt(3);
+            outputStream.write(bytes("SET"));
+            outputStream.writeInt(1);
+            outputStream.writeInt(Integer.MAX_VALUE);
+            outputStream.write('x');
+        }
+        assertThrows(UncheckedIOException.class, () -> RedisCommandMessageCodec.decode(byteArrayOutputStream.toByteArray()));
     }
 
     @Test

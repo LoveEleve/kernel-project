@@ -22,8 +22,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.listener.MessageListener;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
@@ -62,9 +64,15 @@ public class KafkaRedisCommandConsumer implements AutoCloseable {
                                      String localSource, RedisCommandReplayer replayer) {
         this.localSource = localSource;
         this.replayer = replayer;
+        if (localSource == null || localSource.trim().isEmpty()) {
+            logger.warn("The local source of the KafkaRedisCommandConsumer is not set, all the consumed commands "
+                    + "will be replayed, including the commands produced by the local data center");
+        }
         ContainerProperties containerProperties = new ContainerProperties(topic);
         containerProperties.setMessageListener((MessageListener<String, RedisCommandMessage>) record -> onMessage(record.value()));
         this.container = new KafkaMessageListenerContainer<>(consumerFactory, containerProperties);
+        // Retry a failed replay and skip the record after the retries were exhausted
+        this.container.setCommonErrorHandler(new DefaultErrorHandler(new FixedBackOff(1000L, 3)));
     }
 
     /**

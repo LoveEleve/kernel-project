@@ -29,6 +29,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.redisson.Redisson;
 import org.redisson.api.RList;
+import org.redisson.api.RMap;
+import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -39,6 +41,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -105,12 +108,30 @@ class KafkaReplicationE2ETest {
                 RList<String> list = sourceClient.getList("list:1");
                 list.add("a");
                 list.add("b");
+                RSet<String> set = sourceClient.getSet("set:1");
+                set.add("x");
+                set.add("y");
+                RMap<String, String> hash = sourceClient.getMap("hash:1");
+                hash.fastPut("f1", "v1");
+                hash.putAll(Map.of("f2", "v2", "f3", "v3"));
+                sourceClient.getBucket("ttl:1").set("value", Duration.ofMinutes(1));
+                sourceClient.getBucket("large:1").set("x".repeat(100_000));
 
                 awaitUntil(() -> "alice".equals(targetClient.getBucket("user:1").get()));
                 assertEquals("bob", targetClient.getMap("map:1").get("name"));
                 assertEquals(1L, targetClient.getAtomicLong("counter").get());
                 awaitUntil(() -> targetClient.getList("list:1").size() == 2);
                 assertEquals(List.of("a", "b"), targetClient.getList("list:1").readAll());
+                awaitUntil(() -> targetClient.getSet("set:1").size() == 2);
+                assertTrue(targetClient.getSet("set:1").containsAll(Set.of("x", "y")));
+                awaitUntil(() -> targetClient.getMap("hash:1").size() == 3);
+                assertEquals("v1", targetClient.getMap("hash:1").get("f1"));
+                assertEquals("v2", targetClient.getMap("hash:1").get("f2"));
+                assertEquals("v3", targetClient.getMap("hash:1").get("f3"));
+                awaitUntil(() -> "value".equals(targetClient.getBucket("ttl:1").get()));
+                assertTrue(targetClient.getBucket("ttl:1").remainTimeToLive() > 0);
+                awaitUntil(() -> targetClient.getBucket("large:1").get() != null);
+                assertEquals(100_000, ((String) targetClient.getBucket("large:1").get()).length());
                 assertEquals(0L, producer.getDroppedMessageCount());
             } finally {
                 consumer.close();

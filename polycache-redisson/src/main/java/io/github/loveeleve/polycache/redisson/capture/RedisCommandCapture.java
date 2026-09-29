@@ -84,6 +84,10 @@ public class RedisCommandCapture {
         this.listener = Objects.requireNonNull(builder.listener, "The RedisCommandListener must not be null");
         this.commandFilter = builder.commandFilter;
         this.enabled = builder.enabled;
+        if (source == null || source.trim().isEmpty()) {
+            logger.warn("The source of the RedisCommandCapture is not set, the consumer side cannot detect "
+                    + "and skip the commands produced by the local data center");
+        }
     }
 
     /**

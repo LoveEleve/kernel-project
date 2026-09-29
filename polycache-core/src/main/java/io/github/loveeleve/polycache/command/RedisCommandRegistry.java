@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -85,7 +86,7 @@ public abstract class RedisCommandRegistry {
      * @return {@code true} if the command is a write command
      */
     public static boolean isWriteCommand(String commandName) {
-        return commandName != null && WRITE_COMMANDS.contains(commandName.toUpperCase());
+        return commandName != null && WRITE_COMMANDS.contains(commandName.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -95,7 +96,7 @@ public abstract class RedisCommandRegistry {
      * @return {@code true} if the command is known
      */
     public static boolean isCommand(String commandName) {
-        return commandName != null && COMMANDS.contains(commandName.toUpperCase());
+        return commandName != null && COMMANDS.contains(commandName.toUpperCase(Locale.ROOT));
     }
 
     private static Set<String> load(String resourceName) {
@@ -121,7 +122,7 @@ public abstract class RedisCommandRegistry {
             while ((line = reader.readLine()) != null) {
                 String command = line.trim();
                 if (!command.isEmpty() && !command.startsWith("#")) {
-                    commands.add(command.toUpperCase());
+                    commands.add(command.toUpperCase(Locale.ROOT));
                 }
             }
         }

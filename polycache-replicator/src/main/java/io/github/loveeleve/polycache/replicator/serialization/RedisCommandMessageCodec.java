@@ -24,9 +24,13 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * A compact binary codec of {@link RedisCommandMessage}, used as the Kafka payload format.
+ *
+ * <p>All the variable length fields (including the strings, e.g. the routing key) are written with
+ * a 4-byte length prefix, so the 64KB limit of {@code DataOutputStream#writeUTF} does not apply.
  *
  * @author <a href="https://github.com/LoveEleve">LoveEleve</a>
  * @since 1.0.0
@@ -52,15 +56,15 @@ public abstract class RedisCommandMessageCodec {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(256);
             try (DataOutputStream outputStream = new DataOutputStream(byteArrayOutputStream)) {
                 outputStream.writeByte(VERSION);
-                outputStream.writeUTF(message.getCommandName());
+                writeNullableString(outputStream, message.getCommandName());
                 byte[][] args = message.getArgs();
                 outputStream.writeInt(args.length);
                 for (byte[] arg : args) {
                     writeNullableBytes(outputStream, arg);
                 }
-                writeNullableUTF(outputStream, message.getKey());
+                writeNullableString(outputStream, message.getKey());
                 writeNullableBytes(outputStream, message.getKeyBytes());
-                writeNullableUTF(outputStream, message.getSource());
+                writeNullableString(outputStream, message.getSource());
                 outputStream.writeLong(message.getTimestamp());
             }
             return byteArrayOutputStream.toByteArray();
@@ -81,8 +85,12 @@ public abstract class RedisCommandMessageCodec {
             if (version != VERSION) {
                 throw new IllegalArgumentException("Unsupported version of the Redis command message : " + version);
             }
-            String commandName = inputStream.readUTF();
+            String commandName = readNullableString(inputStream);
             int argumentCount = inputStream.readInt();
+            // Each argument carries at least its 4-byte length prefix
+            if (argumentCount < 0 || argumentCount > inputStream.available() / Integer.BYTES) {
+                throw new IOException("Corrupted Redis command message : invalid argument count " + argumentCount);
+            }
             byte[][] args = new byte[argumentCount][];
             for (int i = 0; i < argumentCount; i++) {
                 args[i] = readNullableBytes(inputStream);
@@ -90,9 +98,9 @@ public abstract class RedisCommandMessageCodec {
             return RedisCommandMessage.builder()
                     .commandName(commandName)
                     .args(args)
-                    .key(readNullableUTF(inputStream))
+                    .key(readNullableString(inputStream))
                     .keyBytes(readNullableBytes(inputStream))
-                    .source(readNullableUTF(inputStream))
+                    .source(readNullableString(inputStream))
                     .timestamp(inputStream.readLong())
                     .build();
         } catch (IOException e) {
@@ -100,15 +108,19 @@ public abstract class RedisCommandMessageCodec {
         }
     }
 
-    private static void writeNullableUTF(DataOutputStream outputStream, String value) throws IOException {
-        outputStream.writeBoolean(value != null);
-        if (value != null) {
-            outputStream.writeUTF(value);
+    private static void writeNullableString(DataOutputStream outputStream, String value) throws IOException {
+        if (value == null) {
+            outputStream.writeInt(-1);
+            return;
         }
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        outputStream.writeInt(bytes.length);
+        outputStream.write(bytes);
     }
 
-    private static String readNullableUTF(DataInputStream inputStream) throws IOException {
-        return inputStream.readBoolean() ? inputStream.readUTF() : null;
+    private static String readNullableString(DataInputStream inputStream) throws IOException {
+        byte[] bytes = readNullableBytes(inputStream);
+        return bytes == null ? null : new String(bytes, StandardCharsets.UTF_8);
     }
 
     private static void writeNullableBytes(DataOutputStream outputStream, byte[] value) throws IOException {
@@ -123,6 +135,10 @@ public abstract class RedisCommandMessageCodec {
         int length = inputStream.readInt();
         if (length < 0) {
             return null;
+        }
+        if (length > inputStream.available()) {
+            throw new IOException("Corrupted Redis command message : declared length " + length
+                    + " exceeds the remaining " + inputStream.available() + " bytes");
         }
         byte[] bytes = new byte[length];
         inputStream.readFully(bytes);

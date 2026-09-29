@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>PolyCache</name>
-    <description>Multi-datacenter Redis replication framework: transparent command interception, Kafka-based cross-datacenter replication and dynamic Redis connection routing</description>
+    <description>Multi-datacenter Redis replication framework: transparent command interception on Redisson, Kafka-based cross-datacenter replication and semantic replay</description>
     <url>https://github.com/LoveEleve/polycache</url>
 
     <licenses>
