@@ -17,6 +17,8 @@
 package io.github.loveeleve.polydata.context;
 
 import io.github.loveeleve.polydata.config.DynamicJdbcConfig;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.context.ApplicationListener;
@@ -100,6 +102,14 @@ class DynamicJdbcChildContextRefreshedListener implements ApplicationListener<Co
                     continue;
                 }
                 Object childBean = childContextBeanFactory.getBean(childBeanDefinitionName);
+                if (isContainerPostProcessor(childBean)) {
+                    // The BeanFactoryPostProcessor / BeanPostProcessor is bound to the child context,
+                    // it must not be registered into the parent context, otherwise it would be applied
+                    // to the parent BeanFactory as well. For example, the MapperScannerConfigurer,
+                    // which is registered by the MapperScannerRegistrar of MyBatis, would scan the
+                    // Mapper interfaces into the parent context again
+                    continue;
+                }
                 String parentBeanName = generateParentBeanName(childBeanDefinitionName, childBean, dynamicJdbcConfig, childContext);
                 registerParentBean(parentBeanName, childBean);
             }
@@ -108,6 +118,10 @@ class DynamicJdbcChildContextRefreshedListener implements ApplicationListener<Co
 
     protected boolean isInfrastructureBean(String beanName) {
         return infrastructureBeanNames.contains(beanName);
+    }
+
+    private static boolean isContainerPostProcessor(Object childBean) {
+        return childBean instanceof BeanFactoryPostProcessor || childBean instanceof BeanPostProcessor;
     }
 
     private String generateParentBeanName(String childBeanName, Object childBean, DynamicJdbcConfig dynamicJdbcConfig,
