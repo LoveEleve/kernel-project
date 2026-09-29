@@ -21,7 +21,8 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
 /**
  * The listener of the captured Redis commands. The {@link #onRedisCommand(RedisCommandMessage)}
  * callback is invoked on the Netty event loop of the Redisson connection, so implementations must
- * not block the calling thread.
+ * be thread-safe (the callback may be invoked concurrently by the multiple connections of the
+ * client) and must not block the calling thread.
  *
  * <h3>Example Usage</h3>
  * <pre>{@code

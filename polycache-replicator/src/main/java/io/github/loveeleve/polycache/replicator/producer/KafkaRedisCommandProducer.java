@@ -92,6 +92,10 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
 
     @Override
     public void onRedisCommand(RedisCommandMessage message) {
+        if (!running) {
+            logger.debug("The producer is closed, the Redis command [{}] is ignored", message.getCommandName());
+            return;
+        }
         if (!sendingQueue.offer(message)) {
             long dropped = droppedMessageCount.incrementAndGet();
             logger.warn("The sending queue is full, the Redis command [{}] of the source [{}] was dropped, "
@@ -134,6 +138,7 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
                         }
                     });
         } catch (Throwable e) {
+            droppedMessageCount.incrementAndGet();
             logger.warn("Failed to send the Redis command [{}] of the source [{}]", message.getCommandName(), message.getSource(), e);
         }
     }

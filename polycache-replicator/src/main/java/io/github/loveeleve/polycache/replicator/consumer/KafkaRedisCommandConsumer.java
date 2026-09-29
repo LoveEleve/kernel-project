@@ -26,6 +26,7 @@ import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.listener.MessageListener;
 
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 
 /**
  * The Kafka consumer that replicates the commands produced by the other data centers into the
@@ -75,8 +76,19 @@ public class KafkaRedisCommandConsumer implements AutoCloseable {
     }
 
     void onMessage(RedisCommandMessage message) {
-        if (shouldReplay(message, localSource)) {
-            replayer.replay(message);
+        if (!shouldReplay(message, localSource)) {
+            return;
+        }
+        try {
+            // Wait for the completion of the replay, so that the commands of a partition are
+            // applied in order and the offsets are committed only after the replay completed
+            replayer.replay(message).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("The replay of the Redis command [" + message.getCommandName() + "] was interrupted", e);
+        } catch (ExecutionException e) {
+            // Propagate to the container error handler, which retries the record
+            throw new IllegalStateException("Failed to replay the Redis command [" + message.getCommandName() + "]", e.getCause());
         }
     }
 

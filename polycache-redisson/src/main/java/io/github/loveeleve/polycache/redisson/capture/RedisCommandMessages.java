@@ -109,7 +109,8 @@ public abstract class RedisCommandMessages {
             return ByteBufUtil.getBytes((ByteBuf) param);
         }
         if (param instanceof ChannelName) {
-            return ((ChannelName) param).getName();
+            byte[] name = ((ChannelName) param).getName();
+            return Arrays.copyOf(name, name.length);
         }
         return param.toString().getBytes(StandardCharsets.UTF_8);
     }

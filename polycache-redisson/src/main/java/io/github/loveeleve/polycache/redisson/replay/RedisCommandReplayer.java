@@ -27,6 +27,8 @@ import org.redisson.command.CommandAsyncExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Replays a captured {@link RedisCommandMessage} against a target {@link RedissonClient} by
@@ -45,7 +47,7 @@ import org.slf4j.LoggerFactory;
  * <pre>{@code
  *   RedissonClient target = Redisson.create(targetConfig);
  *   RedisCommandReplayer replayer = new RedisCommandReplayer(target);
- *   replayer.replay(message);
+ *   replayer.replay(message).get();
  * }</pre>
  *
  * @author <a href="https://github.com/LoveEleve">LoveEleve</a>
@@ -56,6 +58,13 @@ public class RedisCommandReplayer {
     private static final Logger logger = LoggerFactory.getLogger(RedisCommandReplayer.class);
 
     private static final MultiDecoder<Object> PERMISSIVE_DECODER = (parts, state) -> parts.size() == 1 ? parts.get(0) : parts;
+
+    /**
+     * The blocking commands cannot be replayed safely: the replay would block a connection and
+     * consume another element of the collection, so they are skipped.
+     */
+    private static final Set<String> BLOCKING_COMMANDS = Set.of(
+            "BLPOP", "BRPOP", "BLMOVE", "BLMPOP", "BRPOPLPUSH", "BZPOPMIN", "BZPOPMAX", "BZMPOP");
 
     private final CommandAsyncExecutor commandExecutor;
 
@@ -70,17 +79,26 @@ public class RedisCommandReplayer {
     }
 
     /**
-     * Replays the given command against the target Redis, asynchronously.
+     * Replays the given command against the target Redis, asynchronously. The returned future
+     * completes when the command was applied, so the caller can serialize the replays of a
+     * partition and acknowledge the consumed offset only after the replay completed.
      *
      * @param message the captured command
+     * @return the completion of the replay, never {@code null}
      */
-    public void replay(RedisCommandMessage message) {
+    public CompletableFuture<Void> replay(RedisCommandMessage message) {
         String commandName = message.getCommandName();
+        if (isBlockingCommand(commandName)) {
+            logger.warn("The blocking command [{}] of the source [{}] was skipped, it cannot be replayed safely",
+                    commandName, message.getSource());
+            return CompletableFuture.completedFuture(null);
+        }
         String key = message.getKey();
         byte[] keyBytes = message.getKeyBytes();
         if (key == null && keyBytes == null) {
-            logger.warn("The command [{}] cannot be replayed because it has no routing key", commandName);
-            return;
+            logger.warn("The command [{}] of the source [{}] was skipped because it has no routing key",
+                    commandName, message.getSource());
+            return CompletableFuture.completedFuture(null);
         }
 
         RedisCommand<Object> command = new RedisCommand<>(commandName, PERMISSIVE_DECODER);
@@ -89,23 +107,24 @@ public class RedisCommandReplayer {
                 ? commandExecutor.writeAsync(key, ByteArrayCodec.INSTANCE, command, params)
                 : commandExecutor.writeAsync(keyBytes, ByteArrayCodec.INSTANCE, command, params);
 
-        future.whenComplete((result, error) -> {
+        CompletableFuture<Void> replayFuture = future.toCompletableFuture().thenApply(result -> (Void) null);
+        replayFuture.whenComplete((result, error) -> {
             if (error != null) {
                 logger.warn("Failed to replay the command [{}] of the source [{}]", commandName, message.getSource(), error);
             } else {
                 logger.debug("The command [{}] of the source [{}] was replayed successfully", commandName, message.getSource());
             }
         });
+        return replayFuture;
     }
 
     /**
-     * Replays the given commands in order.
+     * Tests whether the given command is a blocking command.
      *
-     * @param messages the captured commands
+     * @param commandName the name of the Redis command
+     * @return {@code true} if the command is a blocking command
      */
-    public void replay(Iterable<RedisCommandMessage> messages) {
-        for (RedisCommandMessage message : messages) {
-            replay(message);
-        }
+    static boolean isBlockingCommand(String commandName) {
+        return commandName != null && BLOCKING_COMMANDS.contains(commandName);
     }
 }

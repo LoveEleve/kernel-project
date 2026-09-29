@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.redisson.Redisson;
+import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -36,6 +37,7 @@ import org.springframework.kafka.test.EmbeddedKafkaKraftBroker;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
 
@@ -99,10 +101,16 @@ class KafkaReplicationE2ETest {
                 sourceClient.getBucket("user:1").set("alice");
                 sourceClient.getMap("map:1").put("name", "bob");
                 sourceClient.getAtomicLong("counter").incrementAndGet();
+                // Order-sensitive commands : the consumer must apply them in order
+                RList<String> list = sourceClient.getList("list:1");
+                list.add("a");
+                list.add("b");
 
                 awaitUntil(() -> "alice".equals(targetClient.getBucket("user:1").get()));
                 assertEquals("bob", targetClient.getMap("map:1").get("name"));
                 assertEquals(1L, targetClient.getAtomicLong("counter").get());
+                awaitUntil(() -> targetClient.getList("list:1").size() == 2);
+                assertEquals(List.of("a", "b"), targetClient.getList("list:1").readAll());
                 assertEquals(0L, producer.getDroppedMessageCount());
             } finally {
                 consumer.close();

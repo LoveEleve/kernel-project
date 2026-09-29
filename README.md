@@ -34,8 +34,10 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 命令级捕获 | 命令名 + 参数在 codec 编码完成后被捕获（wire-ready），与源端的序列化器实例无关 |
 | 写命令过滤 | 基于 Redis 官方命令目录与 `ACL CAT write` 写命令目录；另外把 `EVAL` / `EVALSHA` 视为写命令，覆盖 Redisson 内部 Lua 脚本实现的操作 |
 | 语义重放 | 消费端用 `ByteArrayCodec` 把参数原样提交给目标 Redisson 的 `CommandAsyncExecutor`，响应由宽松解码器消费，不依赖业务序列化器 |
-| 失败不复制 | 命令只有执行成功后才发布到 Kafka，失败（如 WRONGTYPE）不会污染其它机房 |
-| 保序与背压 | 生产者用单线程队列发送（按 key 分区保序），队列满时丢弃并计数，绝不阻塞 Netty 事件循环 |
+| 失败不复制 | 命令只有执行成功后才发布到 Kafka，失败（如 WRONGTYPE）不会污染其它机房；Netty 写重试不会导致重复发布 |
+| 捕获零影响 | 捕获发生在连接管线上，任何捕获异常都会被隔离并告警，绝不影响 Redis 命令本身的执行 |
+| 保序与背压 | 生产者用单线程队列按 key 分区发送，队列满时丢弃并计数，绝不阻塞 Netty 事件循环；消费端逐条等待重放完成，同一分区按序落地 |
+| 至少一次复制 | 消费端在重放完成后才提交偏移；重放失败交给容器错误处理器重试，不会在崩溃窗口静默丢失 |
 | 防回环 | 消息携带 `source`，消费端跳过本地机房的写入；重放客户端不安装拦截，天然不会二次复制 |
 | Spring Boot 集成 | 自动装配生产者/消费者/重放器，Redisson Spring Boot Starter 在场时自动把拦截应用到自动配置的 `Config` |
 
@@ -62,7 +64,7 @@ RedisCommandMessage → KafkaRedisCommandProducer（单线程队列）
   ▼
 Kafka Topic（按 key 分区）
   ▼
-机房 B：KafkaRedisCommandConsumer（跳过 source=zone-b）
+机房 B：KafkaRedisCommandConsumer（跳过 source=zone-b，逐条等待重放完成）
   ▼
 RedisCommandReplayer → 目标 Redisson CommandAsyncExecutor → 机房 B 的 Redis
 ```
@@ -113,20 +115,23 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 设计取舍与限制
 
-- **最终一致性**：复制是异步的，源机房写入成功与其它机房可见之间存在延迟。
+- **最终一致性**：复制是异步的，源机房写入成功与其它机房可见之间存在延迟；崩溃重叠窗口内可能出现重复应用（至少一次语义），幂等命令无影响，`INCR` 等非幂等命令需业务侧评估。
 - **`EVAL` 脚本假设确定性**：以脚本原文复制，脚本内使用时间/随机数的写法不保证多机房结果一致；Redisson 内部脚本（如 `RMap.put`）是确定性的。
 - **`EVALSHA` 需要远端已缓存脚本**：未缓存的 SHA 重放会得到 `NOSCRIPT`，生产建议让重放端使用 `EVAL` 路径的客户端配置。
-- **无 key 命令会被跳过**（如 `FLUSHDB`）：消息以 key 作为分区与路由依据，没有 key 无法定位到目标节点。
+- **无 key 命令会被跳过**（如 `FLUSHDB`）：消息以 key 作为分区与路由依据，没有 key 无法定位到目标节点，消费端会告警并跳过。
+- **阻塞命令会被跳过**（`BLPOP` / `BRPOP` / `BZPOPMIN` / `BLMPOP` 等）：重放阻塞命令会再次弹出元素并长期占用连接，语义无法安全还原，消费端会告警并跳过。
+- **源端并发顺序**：捕获的是命令提交到 Redisson 连接的顺序；同一 key 的并发写入在不同连接之间没有全局顺序（与 Redis 本身的多连接行为一致）。
 - **codec 一致性**：值按源端 codec 编码后的字节复制，两侧使用同构 codec 才能正确读出；跨语言/跨 codec 场景需要约定统一 codec。
+- **Topic 需预先创建**（或在 broker 开启 `auto.create.topics.enable`）：否则首次发送需要等待元数据超时才报错。
 
 ## 测试
 
-26 个测试，全部使用本地进程级真实依赖，无外部服务：
+32 个测试，全部使用本地进程级真实依赖，无外部服务：
 
-- `polycache-core`：命令目录与消息模型单测
-- `polycache-redisson`：参数编码/路由 key 提取单测 + 双 Redis 端到端（捕获 → 直接重放）
-- `polycache-replicator`：消息编解码单测 + Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR）
-- `polycache-spring-boot`：自动装配条件与 Redisson Config 定制
+- `polycache-core`（9）：命令目录、写命令判定与消息模型单测
+- `polycache-redisson`（13）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离单测 + 双 Redis 端到端（捕获 → 直接重放）
+- `polycache-replicator`（6）：消息编解码单测 + Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令）
+- `polycache-spring-boot`（4）：自动装配条件与 Redisson Config 定制
 
 ```bash
 ./mvnw test

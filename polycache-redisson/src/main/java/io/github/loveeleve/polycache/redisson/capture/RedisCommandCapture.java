@@ -24,8 +24,11 @@ import org.redisson.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
@@ -68,6 +71,13 @@ public class RedisCommandCapture {
     private final Predicate<String> commandFilter;
 
     private final boolean enabled;
+
+    /**
+     * The promises of the already captured commands (weakly referenced), so that a command retried
+     * on the Netty write path is published only once.
+     */
+    private final Set<CompletableFuture<?>> capturedPromises =
+            Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
     private RedisCommandCapture(Builder builder) {
         this.source = builder.source;
@@ -126,6 +136,10 @@ public class RedisCommandCapture {
         CompletableFuture<?> promise = commandData.getPromise();
         if (promise == null) {
             publish(message);
+            return;
+        }
+        if (!capturedPromises.add(promise)) {
+            // The command was already captured, e.g. it was retried after a connection failure
             return;
         }
         // The command is replicated only when it was executed successfully

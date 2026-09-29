@@ -21,6 +21,8 @@ import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.ChannelPromise;
 import org.redisson.client.protocol.CommandData;
 import org.redisson.client.protocol.CommandsData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Outbound {@link io.netty.channel.ChannelHandler} that observes every command written by the
@@ -34,6 +36,8 @@ import org.redisson.client.protocol.CommandsData;
  */
 class CommandCaptureHandler extends ChannelOutboundHandlerAdapter {
 
+    private static final Logger logger = LoggerFactory.getLogger(CommandCaptureHandler.class);
+
     static final String NAME = "polycache-command-capture";
 
     private final RedisCommandCapture capture;
@@ -44,11 +48,20 @@ class CommandCaptureHandler extends ChannelOutboundHandlerAdapter {
 
     @Override
     public void write(ChannelHandlerContext context, Object message, ChannelPromise promise) throws Exception {
-        if (message instanceof CommandData) {
-            capture.capture((CommandData<?, ?>) message);
-        } else if (message instanceof CommandsData) {
-            capture.capture((CommandsData) message);
-        }
+        captureSafely(message);
         super.write(context, message, promise);
+    }
+
+    private void captureSafely(Object message) {
+        try {
+            if (message instanceof CommandData) {
+                capture.capture((CommandData<?, ?>) message);
+            } else if (message instanceof CommandsData) {
+                capture.capture((CommandsData) message);
+            }
+        } catch (Throwable e) {
+            // The capture must never affect the Redis command itself
+            logger.warn("Failed to capture the Redis command, the command execution is not affected", e);
+        }
     }
 }
