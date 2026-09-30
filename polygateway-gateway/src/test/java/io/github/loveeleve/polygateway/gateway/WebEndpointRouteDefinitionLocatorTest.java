@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,7 +53,9 @@ class WebEndpointRouteDefinitionLocatorTest {
                 .id(2).patterns("/orders/special").methods("GET").build();
         WebEndpointMapping reconcile = WebEndpointMapping.builder(WebEndpointMapping.Kind.MVC)
                 .id(3).patterns("/internal/reconcile").methods("POST")
-                .headers("X-Api-Version=2").params("debug=true").produces("application/json").build();
+                .headers("X-Api-Version=2", "X-Version=1.0", "X-Legacy!=old")
+                .params("debug=true", "!trace")
+                .produces("application/json").build();
 
         StubDiscoveryClient discoveryClient = new StubDiscoveryClient();
         discoveryClient.addInstance(instance("order-service", "/api", orders, special, reconcile));
@@ -81,6 +84,26 @@ class WebEndpointRouteDefinitionLocatorTest {
         assertTrue(predicateArg(reconcileRoute, "Query", "debug"));
         assertTrue(predicateArg(reconcileRoute, "Query", "true"));
         assertTrue(predicateArg(reconcileRoute, "Produces", "application/json"));
+
+        // The literal value is quoted so that the regexp semantics can not over-match
+        assertTrue(predicateArg(reconcileRoute, "Header", Pattern.quote("1.0")));
+        // The negated conditions are skipped
+        assertFalse(predicateArg(reconcileRoute, "Header", "X-Legacy"));
+        assertFalse(predicateArg(reconcileRoute, "Query", "trace"));
+    }
+
+    @Test
+    void testMultiplePatternsAndContextPathNormalization() {
+        WebEndpointMapping endpoint = WebEndpointMapping.builder(WebEndpointMapping.Kind.MVC)
+                .id(1).patterns("/orders/{id}", "/v2/orders/{id}").methods("GET").build();
+        StubDiscoveryClient discoveryClient = new StubDiscoveryClient();
+        // A context path without the leading slash, with a trailing slash
+        discoveryClient.addInstance(instance("order-service", "api/", endpoint));
+
+        RouteDefinition route = new WebEndpointRouteDefinitionLocator(discoveryClient,
+                new PolyGatewayGatewayProperties()).loadRouteDefinitions().get(0);
+        assertTrue(predicateArg(route, "Path", "/order-service/api/orders/{id}"));
+        assertTrue(predicateArg(route, "Path", "/order-service/api/v2/orders/{id}"));
     }
 
     @Test

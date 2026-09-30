@@ -39,6 +39,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The endpoint level {@link RouteDefinitionLocator}: it discovers the web endpoints published by
@@ -200,7 +201,7 @@ public class WebEndpointRouteDefinitionLocator implements RouteDefinitionLocator
      */
     private void addConditionPredicate(List<PredicateDefinition> predicates, String predicateName, String argName,
                                        String condition) {
-        if (condition.startsWith("!") || condition.startsWith("=")) {
+        if (condition.startsWith("!") || condition.startsWith("=") || condition.contains("!=")) {
             logger.debug("The negated condition [{}] can't be expressed by the {} predicate", condition, predicateName);
             return;
         }
@@ -214,7 +215,9 @@ public class WebEndpointRouteDefinitionLocator implements RouteDefinitionLocator
         predicate.setName(predicateName);
         predicate.addArg(argName, name);
         if (StringUtils.hasText(value)) {
-            predicate.addArg("regexp", value);
+            // The endpoint conditions are literal values, quote them so that the regexp semantics
+            // of the official predicate can never over-match (e.g. the dot in "1.0")
+            predicate.addArg("regexp", Pattern.quote(value));
         }
         predicates.add(predicate);
     }
@@ -257,7 +260,11 @@ public class WebEndpointRouteDefinitionLocator implements RouteDefinitionLocator
     }
 
     private boolean isExcluded(WebEndpointMapping endpoint) {
-        for (WebEndpointExclusion exclusion : properties.getExcludes()) {
+        List<WebEndpointExclusion> excludes = properties.getExcludes();
+        if (excludes == null) {
+            return false;
+        }
+        for (WebEndpointExclusion exclusion : excludes) {
             if (exclusion.matches(endpoint)) {
                 return true;
             }

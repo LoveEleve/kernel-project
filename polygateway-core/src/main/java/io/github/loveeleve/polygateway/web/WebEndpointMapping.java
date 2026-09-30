@@ -155,7 +155,7 @@ public final class WebEndpointMapping implements Serializable {
     }
 
     /**
-     * @return the stable identifier derived from the six dimensional conditions
+     * @return the stable identifier computed from the six dimensional conditions
      */
     private int stableId() {
         int result = kind.hashCode();
