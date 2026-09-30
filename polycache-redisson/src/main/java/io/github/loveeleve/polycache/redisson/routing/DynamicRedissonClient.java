@@ -30,16 +30,26 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * A dynamic facade of multiple {@link RedissonClient} targets, routing every call to the target
  * selected on the current thread. It is the Redisson equivalent of the
- * {@code DynamicRedisConnectionFactory} of microsphere-redis : a request (or a task) calls
- * {@link #switchTarget(String)}, performs the Redis operations through {@link #getClient()}, and
- * {@link #clearTarget()} restores the default target. The targets can be added, removed and
- * <b>replaced at runtime</b> ({@link #replaceTarget(String, Config)}), so a configuration change
- * (for example a new address) is applied without restarting the application.
+ * {@code DynamicRedisConnectionFactory} of microsphere-redis, with two differences :
+ *
+ * <ul>
+ * <li>The targets can be added, removed and <b>replaced at runtime</b>
+ * ({@link #replaceTarget(String, Config)}), so a configuration change (for example a new address)
+ * is applied without restarting the application</li>
+ * <li>The target selection is <b>scoped</b> ({@link #runWithTarget(String, Runnable)} /
+ * {@link #callWithTarget(String, Supplier)}) : the previous selection is always restored, so a
+ * pooled request thread never keeps another request's target</li>
+ * </ul>
+ *
+ * <p>A request (or a task) either uses the scoped API, or calls {@link #switchTarget(String)} and
+ * guarantees the {@link #clearTarget()} in a {@code finally} block.
  *
  * <p>The routing client returned by {@link #getClient()} is a JDK dynamic proxy over
  * {@link RedissonClient} : Redisson allows a custom {@link org.redisson.connection.ConnectionManager}
@@ -50,8 +60,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>The routing is resolved when a call is made on the routing client : the data structures
  * ({@code RBucket}, {@code RMap}...) returned by a call are bound to the target client of that
- * call, so the operations on these objects keep using that target even after
- * {@link #clearTarget()}.
+ * call, so the operations on these objects keep using that target even after the target selection
+ * ends.
  *
  * <h3>Example Usage</h3>
  * <pre>{@code
@@ -60,12 +70,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  *   RedissonClient client = dynamic.getClient();
  *   client.getBucket("user:1").set("alice");        // the default target
- *   dynamic.switchTarget("zone-us");                // inside a request / a task
- *   try {
- *       client.getBucket("user:1").set("alice");    // the "zone-us" target
- *   } finally {
- *       dynamic.clearTarget();
- *   }
+ *
+ *   dynamic.runWithTarget("zone-us", () -> {        // the "zone-us" target, restored afterwards
+ *       client.getBucket("user:1").set("alice");
+ *   });
  * }</pre>
  *
  * @author <a href="https://github.com/LoveEleve">LoveEleve</a>
@@ -90,8 +98,8 @@ public class DynamicRedissonClient implements AutoCloseable {
 
     private volatile String defaultTarget = DEFAULT_TARGET;
 
-    private DynamicRedissonClient(Target defaultTarget) {
-        this.targets.put(DEFAULT_TARGET, defaultTarget);
+    private DynamicRedissonClient(Target target) {
+        this.targets.put(DEFAULT_TARGET, target);
         this.routingClient = createRoutingClient();
     }
 
@@ -103,7 +111,7 @@ public class DynamicRedissonClient implements AutoCloseable {
      * @return a new router
      */
     public static DynamicRedissonClient create(Config defaultConfig) {
-        return new DynamicRedissonClient(Target.owned(defaultConfig));
+        return new DynamicRedissonClient(Target.owned(Objects.requireNonNull(defaultConfig, "The default configuration must not be null")));
     }
 
     /**
@@ -114,7 +122,7 @@ public class DynamicRedissonClient implements AutoCloseable {
      * @return a new router
      */
     public static DynamicRedissonClient create(RedissonClient defaultClient) {
-        return new DynamicRedissonClient(Target.shared(defaultClient));
+        return new DynamicRedissonClient(Target.shared(Objects.requireNonNull(defaultClient, "The default client must not be null")));
     }
 
     /**
@@ -125,62 +133,64 @@ public class DynamicRedissonClient implements AutoCloseable {
     }
 
     /**
-     * Registers a new target created from the given configuration. The client is owned by the
-     * router and is shut down when the target is removed or replaced.
+     * Registers a new target created from the given configuration, or replaces the target of the
+     * same name. The client is owned by the router and is shut down when the target is removed or
+     * replaced.
      *
      * @param name   the name of the target
      * @param config the configuration of the target
      * @return this router
      */
     public DynamicRedissonClient addTarget(String name, Config config) {
-        return addTarget(name, Target.owned(config));
+        requireName(name);
+        requireActive();
+        return addTarget(name, Target.owned(Objects.requireNonNull(config, "The configuration must not be null")));
     }
 
     /**
-     * Registers a new target. The client is <b>not</b> shut down by the router.
+     * Registers a new target, or replaces the target of the same name. The client is <b>not</b>
+     * shut down by the router.
      *
      * @param name   the name of the target
      * @param client the client of the target
      * @return this router
      */
     public DynamicRedissonClient addTarget(String name, RedissonClient client) {
-        return addTarget(name, Target.shared(client));
-    }
-
-    private DynamicRedissonClient addTarget(String name, Target target) {
-        Objects.requireNonNull(name, "The name of the target must not be null");
-        Target previous = targets.put(name, target);
-        if (previous != null) {
-            previous.shutdown();
-        }
-        return this;
+        requireName(name);
+        requireActive();
+        return addTarget(name, Target.shared(Objects.requireNonNull(client, "The client must not be null")));
     }
 
     /**
-     * Replaces the target at runtime. The previous client is shut down (when owned by the router)
-     * after the swap; the operations in flight on the previous client may fail.
+     * Replaces the existing target at runtime. The previous client is shut down (when owned by the
+     * router) after the swap; the operations in flight on the previous client may fail.
      *
      * @param name   the name of the target
      * @param config the new configuration of the target
      * @return this router
      */
     public DynamicRedissonClient replaceTarget(String name, Config config) {
-        return addTarget(name, Target.owned(config));
+        requireActive();
+        requireTarget(name);
+        return addTarget(name, Target.owned(Objects.requireNonNull(config, "The configuration must not be null")));
     }
 
     /**
-     * Replaces the target at runtime with the given client.
+     * Replaces the existing target at runtime with the given client.
      *
      * @param name   the name of the target
      * @param client the new client of the target
      * @return this router
      */
     public DynamicRedissonClient replaceTarget(String name, RedissonClient client) {
-        return addTarget(name, Target.shared(client));
+        requireActive();
+        requireTarget(name);
+        return addTarget(name, Target.shared(Objects.requireNonNull(client, "The client must not be null")));
     }
 
     /**
-     * Removes the target. The default target cannot be removed.
+     * Removes the target and shuts it down (when owned by the router). The default target cannot
+     * be removed.
      *
      * @param name the name of the target
      * @return this router
@@ -225,11 +235,13 @@ public class DynamicRedissonClient implements AutoCloseable {
     /**
      * Selects the target of the current thread for the subsequent calls of the routing client. It
      * must be paired with {@link #clearTarget()}, typically in a {@code finally} block, otherwise
-     * the pooled thread keeps the selection.
+     * the pooled thread keeps the selection. Prefer the scoped API
+     * ({@link #runWithTarget(String, Runnable)} / {@link #callWithTarget(String, Supplier)}).
      *
      * @param name the name of the registered target
      */
     public void switchTarget(String name) {
+        requireActive();
         requireTarget(name);
         currentTarget.set(name);
     }
@@ -239,6 +251,47 @@ public class DynamicRedissonClient implements AutoCloseable {
      */
     public void clearTarget() {
         currentTarget.remove();
+    }
+
+    /**
+     * Runs the action with the given target selected on the current thread. The previous selection
+     * is restored afterwards, so the scopes are nestable and a pooled thread never leaks the
+     * selection.
+     *
+     * @param name   the name of the registered target
+     * @param action the action to run
+     */
+    public void runWithTarget(String name, Runnable action) {
+        Objects.requireNonNull(action, "The action must not be null");
+        callWithTarget(name, () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    /**
+     * Calls the supplier with the given target selected on the current thread. The previous
+     * selection is restored afterwards, so the scopes are nestable and a pooled thread never leaks
+     * the selection.
+     *
+     * @param name     the name of the registered target
+     * @param supplier the supplier to call
+     * @param <T>      the result type
+     * @return the result of the supplier
+     */
+    public <T> T callWithTarget(String name, Supplier<T> supplier) {
+        Objects.requireNonNull(supplier, "The supplier must not be null");
+        String previousTarget = getCurrentTarget();
+        switchTarget(name);
+        try {
+            return supplier.get();
+        } finally {
+            if (previousTarget == null) {
+                clearTarget();
+            } else {
+                currentTarget.set(previousTarget);
+            }
+        }
     }
 
     /**
@@ -252,6 +305,7 @@ public class DynamicRedissonClient implements AutoCloseable {
      * @return the client currently in charge of the operations
      */
     public RedissonClient getCurrentClient() {
+        requireActive();
         String name = currentTarget.get();
         if (name != null) {
             Target selected = targets.get(name);
@@ -260,11 +314,7 @@ public class DynamicRedissonClient implements AutoCloseable {
             }
             logger.warn("The selected Redis target [{}] is not registered, the default target [{}] is used", name, defaultTarget);
         }
-        Target target = targets.get(defaultTarget);
-        if (target == null) {
-            throw new IllegalStateException("The Redis target [" + defaultTarget + "] is not registered");
-        }
-        return target.client;
+        return targets.get(defaultTarget).client;
     }
 
     /**
@@ -283,8 +333,19 @@ public class DynamicRedissonClient implements AutoCloseable {
      * Shuts down the router and the targets owned by it.
      */
     public void shutdown() {
+        shutdown(2, 15, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Shuts down the router and the targets owned by it.
+     *
+     * @param quietPeriod the quiet period of the graceful shutdown
+     * @param timeout     the timeout of the graceful shutdown
+     * @param unit        the unit of the quiet period and the timeout
+     */
+    public void shutdown(long quietPeriod, long timeout, TimeUnit unit) {
         if (shutdown.compareAndSet(false, true)) {
-            targets.values().forEach(Target::shutdown);
+            targets.values().forEach(target -> target.shutdown(quietPeriod, timeout, unit));
             targets.clear();
         }
     }
@@ -297,8 +358,7 @@ public class DynamicRedissonClient implements AutoCloseable {
     }
 
     private Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        String methodName = method.getName();
-        switch (methodName) {
+        switch (method.getName()) {
             case "equals":
                 return proxy == args[0];
             case "hashCode":
@@ -308,12 +368,12 @@ public class DynamicRedissonClient implements AutoCloseable {
             case "isShutdown":
                 return isShutdown();
             case "shutdown":
-                shutdown();
+                if (args == null || args.length == 0) {
+                    shutdown();
+                } else {
+                    shutdown((Long) args[0], (Long) args[1], (TimeUnit) args[2]);
+                }
                 return null;
-            case "getConfig":
-                return ((Redisson) getCurrentClient()).getConfig();
-            case "getConnectionManager":
-                return ((Redisson) getCurrentClient()).getConnectionManager();
             default:
                 try {
                     return method.invoke(getCurrentClient(), args);
@@ -323,9 +383,28 @@ public class DynamicRedissonClient implements AutoCloseable {
         }
     }
 
+    private DynamicRedissonClient addTarget(String name, Target target) {
+        Target previous = targets.put(name, target);
+        if (previous != null) {
+            previous.shutdown();
+        }
+        return this;
+    }
+
+    private void requireName(String name) {
+        Objects.requireNonNull(name, "The name of the target must not be null");
+    }
+
     private void requireTarget(String name) {
+        requireName(name);
         if (!targets.containsKey(name)) {
             throw new IllegalArgumentException("The target [" + name + "] is not registered");
+        }
+    }
+
+    private void requireActive() {
+        if (shutdown.get()) {
+            throw new IllegalStateException("The DynamicRedissonClient has been shut down");
         }
     }
 
@@ -352,9 +431,13 @@ public class DynamicRedissonClient implements AutoCloseable {
         }
 
         void shutdown() {
+            shutdown(2, 15, TimeUnit.SECONDS);
+        }
+
+        void shutdown(long quietPeriod, long timeout, TimeUnit unit) {
             if (owned) {
                 try {
-                    client.shutdown();
+                    client.shutdown(quietPeriod, timeout, unit);
                 } catch (Throwable e) {
                     logger.warn("Failed to shut down a Redis target client", e);
                 }

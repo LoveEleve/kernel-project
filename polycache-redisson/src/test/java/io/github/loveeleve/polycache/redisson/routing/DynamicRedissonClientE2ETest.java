@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -129,6 +130,105 @@ class DynamicRedissonClientE2ETest {
                 secondaryClient.shutdown();
                 replacementClient.shutdown();
             }
+        }
+    }
+
+    @Test
+    void testScopedSwitching() throws Exception {
+        try (RedisServer primary = RedisServer.start();
+             RedisServer secondary = RedisServer.start()) {
+
+            DynamicRedissonClient dynamic = DynamicRedissonClient.create(singleServerConfig(primary));
+            dynamic.addTarget("secondary", singleServerConfig(secondary));
+            RedissonClient client = dynamic.getClient();
+
+            RedissonClient primaryClient = Redisson.create(singleServerConfig(primary));
+            RedissonClient secondaryClient = Redisson.create(singleServerConfig(secondary));
+            try {
+                // The scoped call routes to the target and restores the selection afterwards
+                String result = dynamic.callWithTarget("secondary", () -> {
+                    client.getBucket("scoped:call").set("call-value");
+                    return "done";
+                });
+                assertEquals("done", result);
+                assertNull(dynamic.getCurrentTarget());
+                assertEquals("call-value", secondaryClient.getBucket("scoped:call").get());
+                assertNull(primaryClient.getBucket("scoped:call").get());
+
+                // The scopes are nestable and the previous selection is restored
+                dynamic.runWithTarget("secondary", () -> {
+                    client.getBucket("scoped:outer").set("outer-value");
+                    dynamic.runWithTarget(DynamicRedissonClient.DEFAULT_TARGET,
+                            () -> client.getBucket("scoped:inner").set("inner-value"));
+                    assertEquals("secondary", dynamic.getCurrentTarget());
+                    client.getBucket("scoped:after-inner").set("after-value");
+                });
+                assertEquals("outer-value", secondaryClient.getBucket("scoped:outer").get());
+                assertEquals("after-value", secondaryClient.getBucket("scoped:after-inner").get());
+                assertEquals("inner-value", primaryClient.getBucket("scoped:inner").get());
+                assertNull(secondaryClient.getBucket("scoped:inner").get());
+                assertNull(dynamic.getCurrentTarget());
+            } finally {
+                dynamic.shutdown();
+                primaryClient.shutdown();
+                secondaryClient.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void testDefaultTargetIsSwitchable() throws Exception {
+        try (RedisServer primary = RedisServer.start();
+             RedisServer secondary = RedisServer.start()) {
+
+            DynamicRedissonClient dynamic = DynamicRedissonClient.create(singleServerConfig(primary));
+            dynamic.addTarget("secondary", singleServerConfig(secondary));
+            RedissonClient client = dynamic.getClient();
+
+            RedissonClient primaryClient = Redisson.create(singleServerConfig(primary));
+            RedissonClient secondaryClient = Redisson.create(singleServerConfig(secondary));
+            try {
+                dynamic.setDefaultTarget("secondary");
+                assertEquals("secondary", dynamic.getDefaultTarget());
+                client.getBucket("key:new-default").set("value");
+                assertEquals("value", secondaryClient.getBucket("key:new-default").get());
+                assertNull(primaryClient.getBucket("key:new-default").get());
+
+                dynamic.setDefaultTarget(DynamicRedissonClient.DEFAULT_TARGET);
+                client.getBucket("key:restored-default").set("value");
+                assertEquals("value", primaryClient.getBucket("key:restored-default").get());
+                assertNull(secondaryClient.getBucket("key:restored-default").get());
+            } finally {
+                dynamic.shutdown();
+                primaryClient.shutdown();
+                secondaryClient.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void testValidationAndShutdown() throws Exception {
+        try (RedisServer primary = RedisServer.start();
+             RedisServer secondary = RedisServer.start()) {
+
+            DynamicRedissonClient dynamic = DynamicRedissonClient.create(singleServerConfig(primary));
+            dynamic.addTarget("secondary", singleServerConfig(secondary));
+
+            assertThrows(IllegalArgumentException.class, () -> dynamic.switchTarget("unknown"));
+            assertThrows(NullPointerException.class, () -> dynamic.addTarget(null, singleServerConfig(secondary)));
+            assertThrows(NullPointerException.class, () -> dynamic.addTarget("target", (RedissonClient) null));
+            assertThrows(IllegalArgumentException.class, () -> dynamic.replaceTarget("unknown", singleServerConfig(secondary)));
+            assertThrows(IllegalArgumentException.class, () -> dynamic.removeTarget(DynamicRedissonClient.DEFAULT_TARGET));
+
+            // The shutdown overload of the client shuts down all the targets
+            RedissonClient client = dynamic.getClient();
+            client.shutdown(1, 1, TimeUnit.SECONDS);
+            assertTrue(dynamic.isShutdown());
+            assertTrue(client.isShutdown());
+            assertThrows(IllegalStateException.class, () -> client.getBucket("key:after-shutdown"));
+            assertThrows(IllegalStateException.class, () -> dynamic.switchTarget("secondary"));
+            assertThrows(IllegalStateException.class, () -> dynamic.addTarget("late", singleServerConfig(secondary)));
+            assertThrows(IllegalStateException.class, () -> dynamic.replaceTarget("secondary", singleServerConfig(secondary)));
         }
     }
 
