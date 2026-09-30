@@ -17,6 +17,7 @@
 package io.github.loveeleve.polycache.spring.boot.autoconfigure;
 
 import io.github.loveeleve.polycache.redisson.capture.RedisCommandCapture;
+import io.github.loveeleve.polycache.redisson.capture.RedisCommandInterceptor;
 import io.github.loveeleve.polycache.redisson.replay.RedisCommandReplayer;
 import io.github.loveeleve.polycache.replicator.consumer.KafkaRedisCommandConsumer;
 import io.github.loveeleve.polycache.replicator.producer.KafkaRedisCommandProducer;
@@ -105,6 +106,18 @@ class PolyCacheAutoConfigurationTest {
                         "spring.kafka.bootstrap-servers=localhost:9092")
                 .withBean(RedissonClient.class, () -> redissonClient)
                 .run(context -> assertThat(context).hasSingleBean(KafkaRedisCommandConsumer.class));
+    }
+
+    @Test
+    void testInterceptorBeansAreWiredIntoTheCapture() {
+        contextRunner.withPropertyValues(
+                        "polycache.replication.enabled=true",
+                        "polycache.replication.source=zone-a",
+                        "polycache.replication.consumer.enabled=false",
+                        "spring.kafka.bootstrap-servers=localhost:9092")
+                .withBean(RedissonClient.class, () -> redissonClient)
+                .withBean("temporaryKeyFilter", RedisCommandInterceptor.class, () -> message -> null)
+                .run(context -> assertThat(context.getBean(RedisCommandCapture.class).getInterceptors()).hasSize(1));
     }
 
     @Test

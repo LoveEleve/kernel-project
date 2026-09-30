@@ -105,6 +105,38 @@ class RedisCommandCaptureTest {
     }
 
     @Test
+    void testInterceptorsFilterAndRewrite() {
+        List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+        RedisCommandCapture capture = RedisCommandCapture.builder()
+                .source("zone-a")
+                .listener(messages::add)
+                // The temporary keys are not replicated
+                .interceptor(message -> message.getKey() != null && message.getKey().startsWith("temp:") ? null : message)
+                // The published message is rewritten
+                .interceptor(message -> RedisCommandMessage.builder()
+                        .commandName(message.getCommandName())
+                        .args(message.getArgs())
+                        .key(message.getKey())
+                        .keyBytes(message.getKeyBytes())
+                        .source("rewritten")
+                        .timestamp(message.getTimestamp())
+                        .build())
+                .build();
+        assertEquals(2, capture.getInterceptors().size());
+
+        CompletableFuture<Object> temporaryPromise = new CompletableFuture<>();
+        capture.capture(commandData(temporaryPromise, "SET", "temp:1", "value"));
+        temporaryPromise.complete(null);
+        assertTrue(messages.isEmpty());
+
+        CompletableFuture<Object> keptPromise = new CompletableFuture<>();
+        capture.capture(commandData(keptPromise, "SET", "user:1", "value"));
+        keptPromise.complete(null);
+        assertEquals(1, messages.size());
+        assertEquals("rewritten", messages.get(0).getSource());
+    }
+
+    @Test
     void testEvalshaIsTranslatedToEval() throws Exception {
         List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
         RedisCommandCapture capture = capture(messages);

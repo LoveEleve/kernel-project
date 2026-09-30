@@ -17,6 +17,7 @@
 package io.github.loveeleve.polycache.spring.boot.autoconfigure;
 
 import io.github.loveeleve.polycache.redisson.capture.RedisCommandCapture;
+import io.github.loveeleve.polycache.redisson.capture.RedisCommandInterceptor;
 import io.github.loveeleve.polycache.redisson.replay.RedisCommandReplayer;
 import io.github.loveeleve.polycache.replicator.consumer.KafkaRedisCommandConsumer;
 import io.github.loveeleve.polycache.replicator.producer.KafkaRedisCommandProducer;
@@ -103,12 +104,15 @@ public class PolyCacheAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public RedisCommandCapture redisCommandCapture(KafkaRedisCommandProducer producer, PolyCacheProperties properties) {
+    public RedisCommandCapture redisCommandCapture(KafkaRedisCommandProducer producer, PolyCacheProperties properties,
+                                                   ObjectProvider<RedisCommandInterceptor> interceptors) {
         String source = properties.getSource();
         Assert.hasText(source, "The property [" + PolyCacheProperties.PREFIX + ".source] must be set when the replication is enabled");
         return RedisCommandCapture.builder()
                 .source(source)
                 .listener(producer)
+                // The RedisCommandInterceptor beans are collected and ordered by Spring
+                .interceptors(interceptors.orderedStream().toList())
                 .build();
     }
 

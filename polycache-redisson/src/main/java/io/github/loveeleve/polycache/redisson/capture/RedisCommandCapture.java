@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -83,6 +84,8 @@ public class RedisCommandCapture {
 
     private final boolean enabled;
 
+    private final List<RedisCommandInterceptor> interceptors;
+
     /**
      * The promises of the already captured commands (weakly referenced), so that a command retried
      * on the Netty write path is published only once.
@@ -95,6 +98,7 @@ public class RedisCommandCapture {
         this.listener = Objects.requireNonNull(builder.listener, "The RedisCommandListener must not be null");
         this.commandFilter = builder.commandFilter;
         this.enabled = builder.enabled;
+        this.interceptors = List.copyOf(builder.interceptors);
         if (source == null || source.trim().isEmpty()) {
             logger.warn("The source of the RedisCommandCapture is not set, the consumer side cannot detect "
                     + "and skip the commands produced by the local data center");
@@ -127,6 +131,13 @@ public class RedisCommandCapture {
      */
     public boolean isEnabled() {
         return enabled;
+    }
+
+    /**
+     * @return the chain of the interceptors applied to the captured commands
+     */
+    public List<RedisCommandInterceptor> getInterceptors() {
+        return interceptors;
     }
 
     /**
@@ -181,6 +192,20 @@ public class RedisCommandCapture {
     }
 
     private RedisCommandMessage message(CommandData<?, ?> commandData) {
+        RedisCommandMessage message = buildMessage(commandData);
+        if (message == null) {
+            return null;
+        }
+        for (RedisCommandInterceptor interceptor : interceptors) {
+            message = interceptor.intercept(message);
+            if (message == null) {
+                return null;
+            }
+        }
+        return message;
+    }
+
+    private RedisCommandMessage buildMessage(CommandData<?, ?> commandData) {
         if (!enabled) {
             return null;
         }
@@ -277,6 +302,8 @@ public class RedisCommandCapture {
 
         private boolean enabled = true;
 
+        private final List<RedisCommandInterceptor> interceptors = new ArrayList<>();
+
         /**
          * Sets the source that produced the commands, e.g. the name of the data center.
          *
@@ -319,6 +346,28 @@ public class RedisCommandCapture {
          */
         public Builder enabled(boolean enabled) {
             this.enabled = enabled;
+            return this;
+        }
+
+        /**
+         * Adds an interceptor to the chain applied to the captured commands.
+         *
+         * @param interceptor the interceptor
+         * @return this builder
+         */
+        public Builder interceptor(RedisCommandInterceptor interceptor) {
+            this.interceptors.add(Objects.requireNonNull(interceptor, "The RedisCommandInterceptor must not be null"));
+            return this;
+        }
+
+        /**
+         * Adds the interceptors to the chain applied to the captured commands, in the iteration order.
+         *
+         * @param interceptors the interceptors
+         * @return this builder
+         */
+        public Builder interceptors(Collection<? extends RedisCommandInterceptor> interceptors) {
+            interceptors.forEach(this::interceptor);
             return this;
         }
 
