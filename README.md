@@ -74,7 +74,7 @@ polydata-jdbc-spring-boot
 ├── shardingsphere/    ShardingSphere 5.5.1 集成
 ├── autoconfigure/     自动配置导入过滤（模块互斥、按包前缀过滤、缓存）
 ├── env/               default.properties、属性展平
-└── support/           自研工具（无 microsphere 依赖）
+└── support/           自研工具（零第三方框架内部依赖）
 ```
 
 四个 SPI 扩展点（新增一个模块只需实现它们并在 `spring.factories` 注册）：
@@ -155,14 +155,15 @@ mvn clean test
 
 80 个测试（全部 H2 / 纯内存，不依赖外部数据库）：配置解析与校验、URL 归一化、属性展平、四个 SPI 与管道、子上下文隔离与 Bean 升迁、DynamicDataSource 热替换、区域切换重建、配置中心热更新、MyBatis / MyBatis-Plus 同进程并存（各自子上下文隔离）、ShardingSphere 路由（`t_order` → `t_order_0/1`）与集成。
 
-## 与原版（microsphere-dynamic）的差异
+## 版本基线与设计要点
 
-- 依赖基线升级：Spring Boot 2.7 → **3.2.5**，ShardingSphere 5.1.1（starter）→ **5.5.1 核心 + `YamlShardingSphereDataSourceFactory`**，MyBatis 3.0.5，MyBatis-Plus 3.5.7
-- 去除 microsphere 构件依赖，补齐自研 `support` 工具包（Format/Bean/PropertySources/Environment/Factories 等）
-- 移除旧 ShardingSphere starter 相关代码（Mode/Rule swapper 注册、`spring.shardingsphere.*` 属性合成、shutdown hook 同步器）
-- 事件接入改为 PolyConfig 统一事件 + PolyZone 区域事件
-- default.properties 改为 `EnvironmentPostProcessor` 直接加载（替代 DefaultPropertiesPostProcessor 机制）
-- 测试全部改为 H2（去掉 MariaDB4j/MySQL 依赖）
+- 依赖基线：Spring Boot **3.2.5**、ShardingSphere **5.5.1 核心 + `YamlShardingSphereDataSourceFactory`**、
+  MyBatis 3.0.5、MyBatis-Plus 3.5.7
+- 自研 `support` 工具包（Format/Bean/PropertySources/Environment/Factories 等），零第三方框架内部依赖
+- ShardingSphere 集成直接走 YAML 工厂（不依赖官方 starter），移除 Mode/Rule swapper 注册与属性合成等旧机制
+- 事件接入：PolyConfig 统一配置事件 + PolyZone 区域事件
+- default.properties 由 `EnvironmentPostProcessor` 直接加载
+- 测试全部 H2（无外部数据库依赖）
 
 ## Roadmap
 
@@ -170,14 +171,6 @@ mvn clean test
 - [ ] 数据源级监控指标（Micrometer：连接、切换、路由命中）
 - [ ] ShardingSphere Cluster 模式与治理中心支持
 - [ ] 与 Spring Boot `ConfigData` 机制的对齐评估
-
-## 致谢
-
-本项目的配置模型、6 步管道与子上下文设计参考了开源项目
-[microsphere-dynamic](https://github.com/microsphere-projects/microsphere-dynamic)
-（Apache License 2.0）。本实现为独立移植与重写：升级到 Spring Boot 3 / ShardingSphere 5.5.1、
-去除 microsphere 依赖、重写 ShardingSphere 集成与测试。
-详见 [NOTICE](NOTICE)。
 
 ## License
 
