@@ -20,6 +20,7 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
 import io.github.loveeleve.polycache.redisson.capture.RedisCommandListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
@@ -73,19 +74,49 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
 
     private final Thread senderThread;
 
+    private final ProducerFactory<String, RedisCommandMessage> ownedProducerFactory;
+
     private volatile boolean running = true;
 
+    /**
+     * Creates a producer owning the given factory : the factory (and the Kafka producers behind
+     * it) is destroyed when {@link #close()} is called. The {@code KafkaTemplate} does not
+     * destroy an externally provided factory, so the producer releases it explicitly.
+     *
+     * @param producerFactory the producer factory
+     * @param topic           the topic
+     */
     public KafkaRedisCommandProducer(ProducerFactory<String, RedisCommandMessage> producerFactory, String topic) {
-        this(new KafkaTemplate<>(producerFactory), topic);
+        this(new KafkaTemplate<>(producerFactory), topic, DEFAULT_QUEUE_CAPACITY, producerFactory);
     }
 
+    /**
+     * Creates a producer over a caller managed {@link KafkaTemplate} : the template is not
+     * destroyed when {@link #close()} is called.
+     *
+     * @param kafkaTemplate the Kafka template
+     * @param topic         the topic
+     */
     public KafkaRedisCommandProducer(KafkaTemplate<String, RedisCommandMessage> kafkaTemplate, String topic) {
         this(kafkaTemplate, topic, DEFAULT_QUEUE_CAPACITY);
     }
 
+    /**
+     * Creates a producer over a caller managed {@link KafkaTemplate}.
+     *
+     * @param kafkaTemplate the Kafka template
+     * @param topic         the topic
+     * @param queueCapacity the capacity of the sending queue
+     */
     public KafkaRedisCommandProducer(KafkaTemplate<String, RedisCommandMessage> kafkaTemplate, String topic, int queueCapacity) {
+        this(kafkaTemplate, topic, queueCapacity, null);
+    }
+
+    private KafkaRedisCommandProducer(KafkaTemplate<String, RedisCommandMessage> kafkaTemplate, String topic,
+                                      int queueCapacity, ProducerFactory<String, RedisCommandMessage> ownedProducerFactory) {
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
+        this.ownedProducerFactory = ownedProducerFactory;
         this.sendingQueue = new LinkedBlockingQueue<>(queueCapacity);
         this.senderThread = new Thread(this::sendLoop, "polycache-kafka-sender");
         this.senderThread.setDaemon(true);
@@ -171,6 +202,21 @@ public class KafkaRedisCommandProducer implements RedisCommandListener, AutoClos
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+        if (ownedProducerFactory != null) {
+            destroyProducerFactory();
+        }
+    }
+
+    private void destroyProducerFactory() {
+        try {
+            if (ownedProducerFactory instanceof DefaultKafkaProducerFactory) {
+                ((DefaultKafkaProducerFactory<String, RedisCommandMessage>) ownedProducerFactory).destroy();
+            } else if (ownedProducerFactory instanceof AutoCloseable) {
+                ((AutoCloseable) ownedProducerFactory).close();
+            }
+        } catch (Throwable e) {
+            logger.warn("Failed to destroy the Kafka producer factory", e);
         }
     }
 }
