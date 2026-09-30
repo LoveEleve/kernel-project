@@ -29,10 +29,16 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
  * <li>return {@code null} to skip the command (e.g. filter some keys out of the replication)</li>
  * </ul>
  *
+ * <p>Together with {@link RedisCommandListener}, the extension points cover the two phases of the
+ * original {@code RedisConnectionInterceptor} of microsphere-redis : the interceptors observe the
+ * command before its execution completes (and may transform or drop it), the listener is notified
+ * after the command was executed successfully.
+ *
  * <p>The interceptors are invoked on the Netty event loop of the Redisson connection, so they must
  * be thread-safe (the chain may run concurrently on the multiple connections of the client) and
- * must not block the calling thread. An exception thrown by an interceptor skips the capture of
- * the command only, the Redis command itself is never affected.
+ * must not block the calling thread. Each logical command is intercepted exactly once, even when
+ * the Netty write path retries the command. An exception thrown by an interceptor skips the
+ * capture of the command only, the Redis command itself is never affected.
  *
  * <h3>Example Usage</h3>
  * <pre>{@code

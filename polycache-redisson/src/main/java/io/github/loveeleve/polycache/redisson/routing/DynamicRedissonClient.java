@@ -313,6 +313,8 @@ public class DynamicRedissonClient implements AutoCloseable {
                 return selected.client;
             }
             logger.warn("The selected Redis target [{}] is not registered, the default target [{}] is used", name, defaultTarget);
+            // The target was removed (e.g. by another thread), do not keep the stale selection
+            currentTarget.remove();
         }
         return targets.get(defaultTarget).client;
     }

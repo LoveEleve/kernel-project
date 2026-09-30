@@ -16,15 +16,21 @@
  */
 package io.github.loveeleve.polycache.redisson.routing;
 
+import io.github.loveeleve.polycache.command.RedisCommandMessage;
 import io.github.loveeleve.polycache.redisson.RedisServer;
+import io.github.loveeleve.polycache.redisson.capture.RedisCommandCapture;
 import org.junit.jupiter.api.Test;
 import org.redisson.Redisson;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,6 +139,57 @@ class DynamicRedissonClientE2ETest {
         }
     }
 
+    /**
+     * The routing and the capture work together : every target client captures its own writes, so
+     * the writes of the application are replicated whether they go to the default target or to a
+     * switched one.
+     */
+    @Test
+    void testRoutingWithCapture() throws Exception {
+        try (RedisServer primary = RedisServer.start();
+             RedisServer secondary = RedisServer.start()) {
+
+            List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+            RedisCommandCapture capture = RedisCommandCapture.builder()
+                    .source("zone-a")
+                    .listener(messages::add)
+                    .build();
+
+            Config primaryConfig = singleServerConfig(primary);
+            capture.applyTo(primaryConfig);
+            Config secondaryConfig = singleServerConfig(secondary);
+            capture.applyTo(secondaryConfig);
+
+            DynamicRedissonClient dynamic = DynamicRedissonClient.create(primaryConfig);
+            dynamic.addTarget("secondary", secondaryConfig);
+            RedissonClient client = dynamic.getClient();
+
+            RedissonClient primaryClient = Redisson.create(singleServerConfig(primary));
+            RedissonClient secondaryClient = Redisson.create(singleServerConfig(secondary));
+            try {
+                client.getBucket("route:default").set("value-default");
+                dynamic.runWithTarget("secondary",
+                        () -> client.getBucket("route:secondary").set("value-secondary"));
+
+                awaitUntil(() -> messages.size() == 2);
+                assertTrue(messages.stream().anyMatch(message -> "SET".equals(message.getCommandName())
+                        && "route:default".equals(message.getKey())));
+                assertTrue(messages.stream().anyMatch(message -> "SET".equals(message.getCommandName())
+                        && "route:secondary".equals(message.getKey())));
+                assertTrue(messages.stream().allMatch(message -> "zone-a".equals(message.getSource())));
+
+                assertEquals("value-default", primaryClient.getBucket("route:default").get());
+                assertNull(primaryClient.getBucket("route:secondary").get());
+                assertEquals("value-secondary", secondaryClient.getBucket("route:secondary").get());
+                assertNull(secondaryClient.getBucket("route:default").get());
+            } finally {
+                dynamic.shutdown();
+                primaryClient.shutdown();
+                secondaryClient.shutdown();
+            }
+        }
+    }
+
     @Test
     void testScopedSwitching() throws Exception {
         try (RedisServer primary = RedisServer.start();
@@ -230,6 +287,17 @@ class DynamicRedissonClientE2ETest {
             assertThrows(IllegalStateException.class, () -> dynamic.addTarget("late", singleServerConfig(secondary)));
             assertThrows(IllegalStateException.class, () -> dynamic.replaceTarget("secondary", singleServerConfig(secondary)));
         }
+    }
+
+    private static void awaitUntil(BooleanSupplier condition) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + Duration.ofSeconds(10).toMillis();
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        assertTrue(condition.getAsBoolean(), "The condition was not satisfied in time");
     }
 
     private static Config singleServerConfig(RedisServer redisServer) {

@@ -29,6 +29,7 @@ import java.security.MessageDigest;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -102,6 +103,30 @@ class RedisCommandCaptureTest {
                 .source("zone-a")
                 .listener(messages::add)
                 .build();
+    }
+
+    @Test
+    void testInterceptorsRunOncePerCommandOnRetry() {
+        List<RedisCommandMessage> messages = new CopyOnWriteArrayList<>();
+        AtomicInteger invocations = new AtomicInteger();
+        RedisCommandCapture capture = RedisCommandCapture.builder()
+                .source("zone-a")
+                .listener(messages::add)
+                .interceptor(message -> {
+                    invocations.incrementAndGet();
+                    return message;
+                })
+                .build();
+
+        CompletableFuture<Object> promise = new CompletableFuture<>();
+        CommandData<?, ?> commandData = commandData(promise, "SET", "user:1", "alice");
+        // The Netty write path may retry the same command
+        capture.capture(commandData);
+        capture.capture(commandData);
+        promise.complete(null);
+
+        assertEquals(1, invocations.get());
+        assertEquals(1, messages.size());
     }
 
     @Test

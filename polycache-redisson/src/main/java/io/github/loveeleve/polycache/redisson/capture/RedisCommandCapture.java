@@ -151,16 +151,36 @@ public class RedisCommandCapture {
     }
 
     void capture(CommandData<?, ?> commandData) {
-        RedisCommandMessage message = message(commandData);
-        if (message == null) {
+        if (!enabled) {
+            return;
+        }
+        RedisCommand<?> command = commandData.getCommand();
+        String commandName = command.getName();
+        Object[] params = commandData.getParams();
+        if (isScriptLoad(command)) {
+            // The SCRIPT LOAD command is not replicated itself, but the script is recorded so that
+            // the EVALSHA commands can be replicated transparently as EVAL
+            RedisScripts.register(firstParam(params));
+            return;
+        }
+        if (!commandFilter.test(commandName)) {
             return;
         }
         CompletableFuture<?> promise = commandData.getPromise();
+        if (promise != null && !claim(promise)) {
+            // The command was already captured, e.g. it was retried after a connection failure;
+            // the message is built and the interceptors are invoked only once per logical command
+            return;
+        }
+        RedisCommandMessage message = intercept(buildMessage(commandName, params));
+        if (message == null) {
+            return;
+        }
         if (promise == null) {
             publish(message);
             return;
         }
-        captureOnCompletion(promise, List.of(message));
+        publishOnCompletion(promise, List.of(message));
     }
 
     void capture(CommandsData commandsData) {
@@ -170,14 +190,20 @@ public class RedisCommandCapture {
         if (commandsData.isSkipResult()) {
             // With a batch executed with skipResult, Redisson does not complete the promises of the
             // inner commands, so they are published when the whole batch completes
+            CompletableFuture<?> promise = commandsData.getPromise();
+            if (promise != null && !claim(promise)) {
+                return;
+            }
             List<RedisCommandMessage> messages = new ArrayList<>();
             collectMessages(commandsData.getCommands(), messages);
             collectMessages(commandsData.getAttachedCommands(), messages);
-            CompletableFuture<?> promise = commandsData.getPromise();
+            if (messages.isEmpty()) {
+                return;
+            }
             if (promise == null) {
                 messages.forEach(this::publish);
             } else {
-                captureOnCompletion(promise, messages);
+                publishOnCompletion(promise, messages);
             }
             return;
         }
@@ -191,8 +217,17 @@ public class RedisCommandCapture {
         }
     }
 
-    private RedisCommandMessage message(CommandData<?, ?> commandData) {
-        RedisCommandMessage message = buildMessage(commandData);
+    private RedisCommandMessage buildMessage(String commandName, Object[] params) {
+        if (EVALSHA.equals(commandName)) {
+            byte[] script = RedisScripts.find(firstParam(params));
+            if (script != null) {
+                return RedisCommandMessages.message(EVAL, evalshaToEvalParams(script, params), source);
+            }
+        }
+        return RedisCommandMessages.message(commandName, params, source);
+    }
+
+    private RedisCommandMessage intercept(RedisCommandMessage message) {
         if (message == null) {
             return null;
         }
@@ -203,31 +238,6 @@ public class RedisCommandCapture {
             }
         }
         return message;
-    }
-
-    private RedisCommandMessage buildMessage(CommandData<?, ?> commandData) {
-        if (!enabled) {
-            return null;
-        }
-        RedisCommand<?> command = commandData.getCommand();
-        String commandName = command.getName();
-        Object[] params = commandData.getParams();
-        if (isScriptLoad(command)) {
-            // The SCRIPT LOAD command is not replicated itself, but the script is recorded so that
-            // the EVALSHA commands can be replicated transparently as EVAL
-            RedisScripts.register(firstParam(params));
-            return null;
-        }
-        if (!commandFilter.test(commandName)) {
-            return null;
-        }
-        if (EVALSHA.equals(commandName)) {
-            byte[] script = RedisScripts.find(firstParam(params));
-            if (script != null) {
-                return RedisCommandMessages.message(EVAL, evalshaToEvalParams(script, params), source);
-            }
-        }
-        return RedisCommandMessages.message(commandName, params, source);
     }
 
     private static boolean isScriptLoad(RedisCommand<?> command) {
@@ -249,22 +259,29 @@ public class RedisCommandCapture {
         if (commands == null) {
             return;
         }
-        for (CommandData<?, ?> command : commands) {
-            RedisCommandMessage message = message(command);
+        for (CommandData<?, ?> commandData : commands) {
+            RedisCommand<?> command = commandData.getCommand();
+            String commandName = command.getName();
+            Object[] params = commandData.getParams();
+            if (isScriptLoad(command)) {
+                RedisScripts.register(firstParam(params));
+                continue;
+            }
+            if (!commandFilter.test(commandName)) {
+                continue;
+            }
+            RedisCommandMessage message = intercept(buildMessage(commandName, params));
             if (message != null) {
                 messages.add(message);
             }
         }
     }
 
-    private void captureOnCompletion(CompletableFuture<?> promise, List<RedisCommandMessage> messages) {
-        if (messages.isEmpty()) {
-            return;
-        }
-        if (!capturedPromises.add(promise)) {
-            // The command(s) were already captured, e.g. they were retried after a connection failure
-            return;
-        }
+    private boolean claim(CompletableFuture<?> promise) {
+        return capturedPromises.add(promise);
+    }
+
+    private void publishOnCompletion(CompletableFuture<?> promise, List<RedisCommandMessage> messages) {
         // The command is replicated only when it was executed successfully
         promise.whenComplete((result, error) -> {
             if (error == null) {
