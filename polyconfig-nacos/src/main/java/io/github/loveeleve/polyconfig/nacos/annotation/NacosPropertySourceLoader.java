@@ -28,12 +28,12 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.util.StringUtils;
 
+import java.nio.charset.Charset;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * The {@link NacosPropertySource} loader: it fetches the Nacos configurations into the Spring
@@ -79,7 +79,9 @@ public class NacosPropertySourceLoader extends PropertySourceExtensionLoader<Nac
         if (content == null) {
             return new Resource[0];
         }
-        return new Resource[]{new ByteArrayResource(content.getBytes(UTF_8), resourceValue)};
+        // The content is decoded with the same encoding later, keep the round-trip consistent
+        Charset encoding = Charset.forName(resolveEncoding(attributes));
+        return new Resource[]{new ByteArrayResource(content.getBytes(encoding), resourceValue)};
     }
 
     @Override
@@ -87,6 +89,7 @@ public class NacosPropertySourceLoader extends PropertySourceExtensionLoader<Nac
             throws Throwable {
         ConfigService configService = getConfigService(attributes);
         String group = resolveGroup(attributes);
+        Charset encoding = Charset.forName(refresher.getEncoding());
         for (String dataId : refresher.getResourceValues()) {
             configService.addListener(dataId, group, new Listener() {
 
@@ -98,7 +101,7 @@ public class NacosPropertySourceLoader extends PropertySourceExtensionLoader<Nac
                 @Override
                 public void receiveConfigInfo(String configInfo) {
                     if (configInfo != null) {
-                        refresher.refresh(dataId, new ByteArrayResource(configInfo.getBytes(UTF_8), dataId));
+                        refresher.refresh(dataId, new ByteArrayResource(configInfo.getBytes(encoding), dataId));
                     }
                 }
             });
@@ -119,12 +122,29 @@ public class NacosPropertySourceLoader extends PropertySourceExtensionLoader<Nac
         String namespace = attributes.getString("namespace");
         String username = attributes.getString("username");
         String cacheKey = serverAddress + "|" + namespace + "|" + username;
-        ConfigService configService = configServiceCache.get(cacheKey);
-        if (configService == null) {
-            configService = createConfigService(attributes);
-            configServiceCache.put(cacheKey, configService);
+        // Atomic cache : a concurrent creation would leak the replaced ConfigService
+        try {
+            return configServiceCache.computeIfAbsent(cacheKey, key -> {
+                try {
+                    return createConfigService(attributes);
+                } catch (NacosException e) {
+                    throw new ConfigServiceCreationException(e);
+                }
+            });
+        } catch (ConfigServiceCreationException e) {
+            throw (NacosException) e.getCause();
         }
-        return configService;
+    }
+
+    /**
+     * Wraps the checked {@link NacosException} to be thrown from the {@code computeIfAbsent} mapping
+     * function.
+     */
+    private static class ConfigServiceCreationException extends RuntimeException {
+
+        ConfigServiceCreationException(NacosException cause) {
+            super(cause);
+        }
     }
 
     /**

@@ -67,6 +67,13 @@ public class ResourcePropertySourcesRefresher {
     }
 
     /**
+     * @return the character encoding of the managed resources
+     */
+    public String getEncoding() {
+        return encoding;
+    }
+
+    /**
      * @return the resource values managed by this refresher
      */
     public synchronized Set<String> getResourceValues() {
