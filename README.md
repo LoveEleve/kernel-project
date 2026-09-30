@@ -113,14 +113,14 @@ dynamic.addTarget("zone-us", usConfig);                                     // �
 
 RedissonClient client = dynamic.getClient();
 client.getBucket("user:1").set("alice");          // 默认目标
-dynamic.switchTarget("zone-us");                  // 当前线程后续调用走 zone-us
-try {
-    client.getBucket("user:1").set("alice");      // zone-us 目标
-} finally {
-    dynamic.clearTarget();
-}
 
+// 作用域写法（推荐）：自动恢复选择，可嵌套，线程池不残留
+dynamic.runWithTarget("zone-us", () -> client.getBucket("user:1").set("alice"));
+String value = dynamic.callWithTarget("zone-us", () -> client.getBucket("user:1").get());
+
+// 也可手动切换：switchTarget / clearTarget（务必在 finally 清理）
 dynamic.replaceTarget("zone-us", newUsConfig);    // 配置变更：热替换，无需重启
+dynamic.setDefaultTarget("zone-us");              // 切换全局默认目标
 ```
 
 > 实现说明：Redisson 3.27/3.35 的 `Config` 拷贝构造不复制自定义 `ConnectionManager`，`Config#useCustomServers` 经 `Redisson.create` 不生效（已实测验证，属 Redisson 缺陷），因此路由实现在客户端门面层（JDK 代理），不依赖 Redisson 内部实现。

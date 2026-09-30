@@ -29,6 +29,11 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
  * <li>return {@code null} to skip the command (e.g. filter some keys out of the replication)</li>
  * </ul>
  *
+ * <p>The interceptors are invoked on the Netty event loop of the Redisson connection, so they must
+ * be thread-safe (the chain may run concurrently on the multiple connections of the client) and
+ * must not block the calling thread. An exception thrown by an interceptor skips the capture of
+ * the command only, the Redis command itself is never affected.
+ *
  * <h3>Example Usage</h3>
  * <pre>{@code
  *   // Do not replicate the temporary keys
