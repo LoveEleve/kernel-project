@@ -227,7 +227,9 @@ public class ZoneContextChangedListener implements SmartApplicationListener, App
     }
 
     private void rememberOriginalZone(String zone) {
-        if (this.originalZone == null) {
+        // A null zone (the locator chain found nothing) is not remembered, so that the next revert
+        // attempts the location again
+        if (zone != null && this.originalZone == null) {
             this.originalZone = zone;
             logger.info("The original zone ['{}'] has been remembered for reverting", zone);
         }
