@@ -190,6 +190,33 @@ class DynamicRedissonClientE2ETest {
         }
     }
 
+    /**
+     * When the selected target was removed (for example by another thread), the calls fall back to
+     * the default target and the stale thread selection is cleared.
+     */
+    @Test
+    void testRemovedSelectedTargetFallsBackToDefault() throws Exception {
+        try (RedisServer primary = RedisServer.start();
+             RedisServer secondary = RedisServer.start()) {
+
+            DynamicRedissonClient dynamic = DynamicRedissonClient.create(singleServerConfig(primary));
+            dynamic.addTarget("secondary", singleServerConfig(secondary));
+            RedissonClient client = dynamic.getClient();
+            RedissonClient primaryClient = Redisson.create(singleServerConfig(primary));
+            try {
+                dynamic.switchTarget("secondary");
+                dynamic.removeTarget("secondary");
+
+                client.getBucket("fallback:key").set("value");
+                assertEquals("value", primaryClient.getBucket("fallback:key").get());
+                assertNull(dynamic.getCurrentTarget());
+            } finally {
+                dynamic.shutdown();
+                primaryClient.shutdown();
+            }
+        }
+    }
+
     @Test
     void testScopedSwitching() throws Exception {
         try (RedisServer primary = RedisServer.start();
