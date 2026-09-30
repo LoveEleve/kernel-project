@@ -88,10 +88,10 @@ class TwoDatacenterDockerDemoTest {
         try {
             String bootstrapServers = broker.getBrokersAsString();
             line();
-            System.out.println("PolyCache 双机房演示（Docker Redis + Embedded Kafka）");
+            System.out.println("PolyCache two data centers demo (Docker Redis + Embedded Kafka)");
             line();
-            System.out.println("机房 A : Redis @ 127.0.0.1:" + REDIS_A_PORT);
-            System.out.println("机房 B : Redis @ 127.0.0.1:" + REDIS_B_PORT);
+            System.out.println("Data center A : Redis @ 127.0.0.1:" + REDIS_A_PORT);
+            System.out.println("Data center B : Redis @ 127.0.0.1:" + REDIS_B_PORT);
             System.out.println("Kafka  : " + bootstrapServers + " (topic " + TOPIC + ")");
             line();
 
@@ -107,11 +107,11 @@ class TwoDatacenterDockerDemoTest {
                             clean(cleanClientA);
                             clean(cleanClientB);
 
-                            System.out.println("[1] 两个机房各写入 " + WRITE_COMMAND_COUNT + " 条写命令（SET / EVAL / INCR / 批量 / 顺序）");
+                            System.out.println("[1] Each data center issues " + WRITE_COMMAND_COUNT + " write commands (SET / EVAL / INCR / batch / ordered)");
                             write(clientA, "A");
                             write(clientB, "B");
 
-                            System.out.println("[2] 等待跨机房同步 ...");
+                            System.out.println("[2] Waiting for the cross data center replication ...");
                             awaitUntil(() -> value(clientB, "user:A").equals("alice"));
                             awaitUntil(() -> value(clientA, "user:B").equals("bob"));
                             assertEquals("user-A", mapValue(clientB, "map:A"));
@@ -122,8 +122,8 @@ class TwoDatacenterDockerDemoTest {
                             awaitUntil(() -> value(clientA, "batch:B").equals("batch-B"));
                             awaitUntil(() -> list(clientB, "list:A").equals(List.of("1", "2")));
                             awaitUntil(() -> list(clientA, "list:B").equals(List.of("1", "2")));
-                            System.out.println("    机房 B 已收到 A 的全部写入 ✓");
-                            System.out.println("    机房 A 已收到 B 的全部写入 ✓");
+                            System.out.println("    Data center B received every write of A");
+                            System.out.println("    Data center A received every write of B");
 
                             // A replication loop would keep publishing the replayed commands
                             Thread.sleep(500);
@@ -132,14 +132,14 @@ class TwoDatacenterDockerDemoTest {
                             assertEquals(0L, producerA.getDroppedMessageCount());
                             assertEquals(0L, producerB.getDroppedMessageCount());
 
-                            System.out.println("[3] 复制回环检查：A 出站 " + producerA.getSentMessageCount()
-                                    + " 条 / B 出站 " + producerB.getSentMessageCount() + " 条（与写入次数一致，无回环）✓");
+                            System.out.println("[3] Replication loop check : A sent " + producerA.getSentMessageCount()
+                                    + " / B sent " + producerB.getSentMessageCount() + " (equal to the write counts, no loop)");
                             line();
-                            dump(clientA, "机房 A (127.0.0.1:" + REDIS_A_PORT + ")", "A");
+                            dump(clientA, "Data center A (127.0.0.1:" + REDIS_A_PORT + ")", "A");
                             line();
-                            dump(clientB, "机房 B (127.0.0.1:" + REDIS_B_PORT + ")", "B");
+                            dump(clientB, "Data center B (127.0.0.1:" + REDIS_B_PORT + ")", "B");
                             line();
-                            System.out.println("演示通过 ✓");
+                            System.out.println("DEMO PASSED");
                             line();
                         } finally {
                             clean(cleanClientA);
@@ -173,9 +173,9 @@ class TwoDatacenterDockerDemoTest {
     }
 
     private static void dump(RedissonClient client, String title, String localDataCenter) {
-        System.out.println(title + " 的演示数据 :");
+        System.out.println(title + " demo data :");
         for (String dataCenter : List.of("A", "B")) {
-            String source = localDataCenter.equals(dataCenter) ? "  <- 本地写入" : "  <- 来自另一机房";
+            String source = localDataCenter.equals(dataCenter) ? "  <- local write" : "  <- replicated from the other data center";
             System.out.printf("  %suser:%s   = %s%s%n", KEY_PREFIX, dataCenter, value(client, "user:" + dataCenter), source);
             System.out.printf("  %smap:%s    = {name=%s}%n", KEY_PREFIX, dataCenter, mapValue(client, "map:" + dataCenter));
             System.out.printf("  %scounter:%s= %d%n", KEY_PREFIX, dataCenter, counter(client, "counter:" + dataCenter));
@@ -215,7 +215,7 @@ class TwoDatacenterDockerDemoTest {
     private static void clean(RedissonClient client) {
         long deleted = client.getKeys().deleteByPattern(KEY_PREFIX + "*");
         if (deleted > 0) {
-            System.out.println("    清理 " + deleted + " 个演示 Key");
+            System.out.println("    Cleaned up " + deleted + " demo keys");
         }
     }
 
