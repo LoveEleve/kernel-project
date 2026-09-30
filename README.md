@@ -22,7 +22,7 @@ polydata.jdbc.configs.orders={"name":"orders","ha-datasource":{ \
 3. 配置中心改配置时（PolyConfig 统一事件），同样触发热替换；
 4. `sharding-sphere` 模块存在时，直接把 ShardingSphere 5.5.1 的数据源构建出来，物理库从同一份配置读取。
 
-## 特性（对应简历三点）
+## 核心特性
 
 | 能力 | 说明 |
 |------|------|
