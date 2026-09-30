@@ -183,15 +183,16 @@ mvn clean test
 - **回滚基线语义**：`originalZone` 回到"首次同步时的区域"——属性缺省时由定位链自动识别（AWS 元数据），
   否则为首次配置的区域值。
 
-## 与 microsphere-multiactive 的差异
+## 设计要点
 
-- 移除 Netflix/Ribbon/Eureka 专属模块（Ribbon 已停止维护），Eureka 注册场景由原生
+- 模块精简：移除 Netflix/Ribbon/Eureka 专属模块（Ribbon 已停止维护），注册场景由原生
   `InstancePreRegisteredEvent` 覆盖
-- 属性命名空间由 `microsphere.availability.zone.*` 调整为 `polyzone.zone.*`
-- 修复 `originalZone` 回滚语义：记住首次同步的原始区域，即使 zone 属性被显式改过也能正确回滚
-- 修复 `PropertyChangeEvent` 时序：先提交新值再通知监听器，监听器内读到的永远是最新值
-- 修复 factories 加载的定位器生命周期缺失：补齐 `EnvironmentAware` 等回调，`locator.timeout` 等属性生效
-- 去除对 microsphere 构件的依赖，仅依赖 Spring 官方组件
+- 属性命名空间 `polyzone.zone.*`，两级开关（能力总开关 + 偏好开关）
+- `originalZone` 回滚语义：记住首次同步的原始区域，即使 zone 属性被显式改过也能正确回滚
+- `PropertyChangeEvent` 时序：先提交新值再通知监听器，监听器内读到的永远是最新值
+- 定位器支持 `META-INF/spring.factories` 扩展，并补齐 `EnvironmentAware` 等生命周期回调，
+  `locator.timeout` 等属性生效
+- 仅依赖 Spring 官方组件，零第三方框架内部依赖
 
 ## Roadmap
 
@@ -199,13 +200,6 @@ mvn clean test
 - [ ] Spring Cloud Gateway 区域路由示例
 - [ ] 基于健康检查的自动故障转移（免手工改配置）
 - [ ] Kubernetes Downward API 定位器
-
-## 致谢
-
-本项目的设计与部分实现参考了开源项目
-[microsphere-multiactive](https://github.com/microsphere-projects/microsphere-multiactive)
-（Apache License 2.0），并在其基础上做了模块精简、属性命名空间调整、回滚语义修复与测试重写。
-详见 [NOTICE](NOTICE)。
 
 ## License
 
