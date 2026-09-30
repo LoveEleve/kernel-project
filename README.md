@@ -144,10 +144,16 @@ polydata.jdbc.configs.goods={"name":"goods","datasource":[{"name":"ds","url":"jd
 
 ```bash
 # 要求 JDK 17+，Maven 3.8+
+# 前置：本项目依赖 PolyZone 与 PolyConfig 的 1.0.0-SNAPSHOT 构件，
+#       先把这两个仓库构建并安装到同一本地 Maven 仓库：
+mvn -f ../polyzone/pom.xml clean install
+mvn -f ../polyconfig/pom.xml clean install
+
+# 再构建本项目
 mvn clean test
 ```
 
-76 个测试（全部 H2 / 纯内存，不依赖外部数据库）：配置解析与校验、URL 归一化、属性展平、四个 SPI 与管道、子上下文隔离与 Bean 升迁、DynamicDataSource 热替换、区域切换重建、配置中心热更新、MyBatis/MyBatis-Plus 互斥、ShardingSphere 路由（`t_order` → `t_order_0/1`）与集成。
+80 个测试（全部 H2 / 纯内存，不依赖外部数据库）：配置解析与校验、URL 归一化、属性展平、四个 SPI 与管道、子上下文隔离与 Bean 升迁、DynamicDataSource 热替换、区域切换重建、配置中心热更新、MyBatis / MyBatis-Plus 同进程并存（各自子上下文隔离）、ShardingSphere 路由（`t_order` → `t_order_0/1`）与集成。
 
 ## 与原版（microsphere-dynamic）的差异
 

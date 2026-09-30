@@ -112,9 +112,8 @@ class DynamicJdbcContextProcessor {
 
     private void processDynamic(DynamicJdbcConfig dynamicJdbcConfig, String dynamicJdbcConfigPropertyName,
                                 ConfigurableApplicationContext context) {
-        // For now, it just supports Dynamic DataSource
+        // The Dynamic DataSource is the only dynamic feature supported at the moment
         processDynamicDataSource(dynamicJdbcConfig, dynamicJdbcConfigPropertyName, context);
-        // TODO support more dynamic features
     }
 
     private void processDynamicDataSource(DynamicJdbcConfig dynamicJdbcConfig, String dynamicJdbcConfigPropertyName,
