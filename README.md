@@ -41,7 +41,7 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 保序与背压 | 生产者用单线程队列按 key 分区发送，队列满时丢弃并计数，绝不阻塞 Netty 事件循环；消费端逐条等待重放完成，同一分区按序落地 |
 | 至少一次复制 | 消费端在重放完成后才提交偏移；默认从 `earliest` 开始消费（启动/重平衡窗口不丢命令）；重放失败重试 3 次（间隔 1s），仍失败则告警并跳过 |
 | 防回环 | 消息携带 `source`，消费端跳过本地机房的写入；Spring Boot 自动装配为重放创建专用 Redisson 客户端（克隆配置、不安装捕获），重放写不会被再次捕获，手动装配时重放客户端同样不得安装捕获 |
-| 动态连接路由 | `DynamicRedissonClient` 在运行期把调用切到不同 Redis 目标：线程级 `switchTarget`/`clearTarget`、目标增删与配置变更热替换，对标原版 `DynamicRedisConnectionFactory`；数据对象绑定获取时的目标 |
+| 动态连接路由 | `DynamicRedissonClient` 在运行期把调用切到不同 Redis 目标：线程级 `switchTarget`/`clearTarget`（含自动恢复的作用域 API）、目标增删与配置变更热替换；数据对象绑定获取时的目标 |
 | 拦截器 SPI | 捕获链可注册 `RedisCommandInterceptor`（Spring Boot 自动收集 Bean 并排序）：过滤 / 改写消息（跳过临时 key、脱敏、审计等） |
 | Spring Boot 集成 | 自动装配生产者/消费者/重放器，Redisson Spring Boot Starter 在场时自动把拦截应用到自动配置的 `Config` |
 
@@ -191,10 +191,6 @@ docker exec redis-lab-8 redis-cli config set protected-mode no
 ```
 
 演示使用 `polycache-demo:` 前缀并在结束后清理自身数据；容器不可达时测试自动跳过。
-
-## 与 microsphere-redis 的关系
-
-拦截与 Kafka 复制的问题域来自 [microsphere-redis](https://github.com/microsphere-projects/microsphere-redis)，但实现层完全不同：原版基于 Spring Data Redis 的 `RedisConnection` 动态代理做方法级拦截；本版重建为 Redisson 原生命令级方案（Netty 管线捕获 + `CommandAsyncExecutor` 重放），不依赖 spring-data-redis 与任何 microsphere 组件。命令目录资源派生自 microsphere-redis（Apache-2.0），详见 `NOTICE`。
 
 ## License
 

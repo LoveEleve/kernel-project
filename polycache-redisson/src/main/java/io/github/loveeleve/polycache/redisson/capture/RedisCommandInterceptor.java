@@ -30,9 +30,8 @@ import io.github.loveeleve.polycache.command.RedisCommandMessage;
  * </ul>
  *
  * <p>Together with {@link RedisCommandListener}, the extension points cover the two phases of the
- * original {@code RedisConnectionInterceptor} of microsphere-redis : the interceptors observe the
- * command before its execution completes (and may transform or drop it), the listener is notified
- * after the command was executed successfully.
+ * interception : the interceptors observe the command before its execution completes (and may
+ * transform or drop it), the listener is notified after the command was executed successfully.
  *
  * <p>The interceptors are invoked on the Netty event loop of the Redisson connection, so they must
  * be thread-safe (the chain may run concurrently on the multiple connections of the client) and

@@ -36,8 +36,7 @@ import java.util.function.Supplier;
 
 /**
  * A dynamic facade of multiple {@link RedissonClient} targets, routing every call to the target
- * selected on the current thread. It is the Redisson equivalent of the
- * {@code DynamicRedisConnectionFactory} of microsphere-redis, with two differences :
+ * selected on the current thread. Two capabilities distinguish it :
  *
  * <ul>
  * <li>The targets can be added, removed and <b>replaced at runtime</b>
