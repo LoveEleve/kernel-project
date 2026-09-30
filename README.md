@@ -41,6 +41,8 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 保序与背压 | 生产者用单线程队列按 key 分区发送，队列满时丢弃并计数，绝不阻塞 Netty 事件循环；消费端逐条等待重放完成，同一分区按序落地 |
 | 至少一次复制 | 消费端在重放完成后才提交偏移；默认从 `earliest` 开始消费（启动/重平衡窗口不丢命令）；重放失败重试 3 次（间隔 1s），仍失败则告警并跳过 |
 | 防回环 | 消息携带 `source`，消费端跳过本地机房的写入；Spring Boot 自动装配为重放创建专用 Redisson 客户端（克隆配置、不安装捕获），重放写不会被再次捕获，手动装配时重放客户端同样不得安装捕获 |
+| 动态连接路由 | `DynamicRedissonClient` 在运行期把调用切到不同 Redis 目标：线程级 `switchTarget`/`clearTarget`、目标增删与配置变更热替换，对标原版 `DynamicRedisConnectionFactory`；数据对象绑定获取时的目标 |
+| 拦截器 SPI | 捕获链可注册 `RedisCommandInterceptor`（Spring Boot 自动收集 Bean 并排序）：过滤 / 改写消息（跳过临时 key、脱敏、审计等） |
 | Spring Boot 集成 | 自动装配生产者/消费者/重放器，Redisson Spring Boot Starter 在场时自动把拦截应用到自动配置的 `Config` |
 
 ## 模块
@@ -48,7 +50,7 @@ client.getBucket("user:1").get();             // 读命令不复制
 | 模块 | 职责 |
 |------|------|
 | **polycache-core** | Redis 命令目录、写命令目录与复制消息模型（无客户端依赖） |
-| **polycache-redisson** | Redisson 命令拦截（NettyHook + 连接管线 Handler）与语义重放（CommandAsyncExecutor） |
+| **polycache-redisson** | Redisson 命令拦截（NettyHook + 连接管线 Handler）、语义重放（CommandAsyncExecutor）、动态连接路由与拦截器 SPI |
 | **polycache-replicator** | Kafka 消息编解码、异步生产者、消费者与跨机房过滤 |
 | **polycache-spring-boot** | 自动装配与配置属性 |
 
@@ -103,6 +105,26 @@ RedisCommandCapture capture = RedisCommandCapture.builder()
 capture.applyTo(sourceConfig);
 ```
 
+### 动态连接路由（可选）
+
+```java
+DynamicRedissonClient dynamic = DynamicRedissonClient.create(primaryConfig); // 默认目标
+dynamic.addTarget("zone-us", usConfig);                                     // 注册目标
+
+RedissonClient client = dynamic.getClient();
+client.getBucket("user:1").set("alice");          // 默认目标
+dynamic.switchTarget("zone-us");                  // 当前线程后续调用走 zone-us
+try {
+    client.getBucket("user:1").set("alice");      // zone-us 目标
+} finally {
+    dynamic.clearTarget();
+}
+
+dynamic.replaceTarget("zone-us", newUsConfig);    // 配置变更：热替换，无需重启
+```
+
+> 实现说明：Redisson 3.27/3.35 的 `Config` 拷贝构造不复制自定义 `ConnectionManager`，`Config#useCustomServers` 经 `Redisson.create` 不生效（已实测验证，属 Redisson 缺陷），因此路由实现在客户端门面层（JDK 代理），不依赖 Redisson 内部实现。
+
 ## 配置项
 
 | 配置 | 默认值 | 说明 |
@@ -128,12 +150,12 @@ Kafka 连接参数复用 Spring Boot 的 `spring.kafka.*`。
 
 ## 测试
 
-49 个测试，全部使用进程级真实依赖（Redis 为本地 `redis-server` 进程或 Docker 容器，Kafka 为 Embedded Broker）：
+52 个测试，全部使用进程级真实依赖（Redis 为本地 `redis-server` 进程或 Docker 容器，Kafka 为 Embedded Broker）：
 
 - `polycache-core`（10）：命令目录、写命令判定（含 Locale 无关性）与消息模型单测
-- `polycache-redisson`（22）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次 / 脚本注册表与 EVALSHA→EVAL 转换单测 + 双 Redis 端到端（含 `useScriptCache` 场景）+ 3 节点真集群双向端到端 + 多线程并发捕获
+- `polycache-redisson`（24）：参数编码 / 路由 key 提取 / 重试去重 / 异常隔离 / skipResult 批次 / 脚本注册表与 EVALSHA→EVAL 转换 / 拦截器链单测 + 双 Redis 端到端（含 `useScriptCache` 场景）+ 3 节点真集群双向端到端 + 多线程并发捕获 + 动态路由端到端（线程切换/并发/热替换）
 - `polycache-replicator`（9）：消息编解码单测（含超长 key 与损坏负载）+ Embedded Kafka 端到端（源 Redis → Kafka → 目标 Redis，覆盖 SET / RMap(EVAL) / INCR / 顺序敏感命令 / SADD / HSET / putAll / TTL / 100KB 大 value / skipResult 批次）
-- `polycache-spring-boot`（8）：自动装配条件、参数校验、Redisson Config 定制 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）+ Docker 双机房演示（容器不可达时自动跳过）
+- `polycache-spring-boot`（9）：自动装配条件、参数校验、Redisson Config 定制、拦截器 Bean 装配 + 双机房全链路端到端（两个应用上下文 + 共享 Kafka + 各自 Redis，验证互相同步且不产生复制回环）+ Docker 双机房演示（容器不可达时自动跳过）
 
 ```bash
 ./mvnw test
