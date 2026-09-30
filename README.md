@@ -188,15 +188,13 @@ mvn clean test
   Nacos 推送线程与业务线程竞争，也避免监听器在持锁状态下执行。
 - **暂不支持资源通配符**：如 `classpath*:/config/*.properties` 的批量资源模式尚未实现（按需补充）。
 
-## 与 microsphere-configuration 的差异
+## 设计要点
 
-- 修正原版 Nacos 注解拼写错误：`NacosPorpertySource` → `@NacosPropertySource`
-- 事件模型重设计：原版是 PropertySource 级（ADDED/REPLACED/REMOVED），PolyConfig 是属性级
-  （属性名 + 新旧值 + 来源），更贴合"哪些配置变了"的消费场景
-- 新增通用适配：`EnvironmentChangeEvent` → 统一事件（原版无此路径，必须走注解加载才有事件）
-- Nacos 后端改用官方 `nacos-client` SDK（原版为自研 OpenAPI HTTP 客户端），自动刷新更可靠
-- Loader 对后端注解的属性读取有缺省兜底（三方后端注解不必声明全部通用属性）
-- 刷新器线程安全（原版无同步）
+- 事件模型为属性级：属性名 + 新旧值 + 来源，贴合"哪些配置变了"的消费场景
+- 通用适配：`EnvironmentChangeEvent` → 统一事件（非注解加载路径同样有事件）
+- Nacos 后端基于官方 `nacos-client` SDK，自动刷新更可靠
+- Loader 对后端注解属性读取有缺省兜底（三方后端注解不必声明全部通用属性）
+- 刷新器线程安全：状态更新在锁内完成，事件在锁外发布
 - Apollo / etcd / ZooKeeper 后端在 Roadmap
 
 ## Roadmap
@@ -205,15 +203,6 @@ mvn clean test
 - [ ] etcd / ZooKeeper 适配模块
 - [ ] 配置变更审计（变更历史 + 来源标记）
 - [ ] 与 Spring Boot `ConfigData` 机制的对齐评估
-
-## 致谢
-
-本项目的三层设计参考了开源项目
-[microsphere-configuration](https://github.com/microsphere-projects/microsphere-configuration)
-与 [microsphere-spring](https://github.com/microsphere-projects/microsphere-spring)
-（Apache License 2.0）。本实现为独立重写：修正了原版 Nacos 注解拼写错误（`NacosPorpertySource`）、
-重新设计了事件模型（属性级新旧值），并补充了 EnvironmentChangeEvent 通用适配与完整测试。
-详见 [NOTICE](NOTICE)。
 
 ## License
 
