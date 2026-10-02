@@ -1,0 +1,15 @@
+PolyData
+Copyright 2026 LoveEleve
+
+This product includes software developed as part of the Microsphere Projects
+(https://github.com/microsphere-projects/microsphere-dynamic), which is
+licensed under the Apache License, Version 2.0.
+
+The configuration model, the six-step context processing pipeline, the
+child-context isolation and the DynamicDataSource hot-swap design are derived
+from microsphere-dynamic. This product is an independent port: it upgrades the
+baseline to Spring Boot 3.2.5 / ShardingSphere 5.5.1 / MyBatis 3.0.5 /
+MyBatis-Plus 3.5.7, removes all microsphere artifact dependencies (replaced by
+the self-written support package), rewrites the ShardingSphere integration
+around YamlShardingSphereDataSourceFactory, adapts the event integration to
+PolyConfig and PolyZone, and ships a rewritten H2-based test suite.

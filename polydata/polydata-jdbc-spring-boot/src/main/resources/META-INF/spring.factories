@@ -1,0 +1,49 @@
+# ApplicationListener
+org.springframework.context.ApplicationListener=\
+io.github.loveeleve.polydata.context.DynamicJdbcContextApplicationListener
+
+# AutoConfigurationImportListener
+org.springframework.boot.autoconfigure.AutoConfigurationImportListener=\
+io.github.loveeleve.polydata.autoconfigure.DynamicJdbcAutoConfigurationImportListener
+
+# EnvironmentPostProcessor (default properties)
+org.springframework.boot.env.EnvironmentPostProcessor=\
+io.github.loveeleve.polydata.env.DynamicJdbcDefaultPropertiesEnvironmentPostProcessor
+
+# ConfigPostProcessor
+io.github.loveeleve.polydata.config.ConfigPostProcessor=\
+io.github.loveeleve.polydata.config.DynamicJdbcConfigPostProcessor,\
+io.github.loveeleve.polydata.datasource.config.DataSourcePropertiesConfigPostProcessor,\
+io.github.loveeleve.polydata.transaction.config.TransactionConfigPostProcessor,\
+io.github.loveeleve.polydata.shardingsphere.config.ShardingSphereConfigPostProcessor,\
+io.github.loveeleve.polydata.mybatis.config.MybatisConfigPostProcessor,\
+io.github.loveeleve.polydata.mybatisplus.config.MybatisPlusConfigPostProcessor
+
+# ConfigValidator
+io.github.loveeleve.polydata.config.validation.ConfigValidator=\
+io.github.loveeleve.polydata.config.validation.DynamicJdbcConfigValidator,\
+io.github.loveeleve.polydata.datasource.validation.DataSourcePropertiesModuleValidator,\
+io.github.loveeleve.polydata.transaction.validation.TransactionConfigValidator,\
+io.github.loveeleve.polydata.shardingsphere.validation.ShardingSphereConfigValidator,\
+io.github.loveeleve.polydata.mybatis.validation.MybatisConfigValidator,\
+io.github.loveeleve.polydata.mybatisplus.validation.MybatisPlusConfigValidator
+
+# ConfigConfigurationPropertiesSynthesizer
+io.github.loveeleve.polydata.env.ConfigConfigurationPropertiesSynthesizer=\
+io.github.loveeleve.polydata.transaction.env.TransactionConfigConfigurationPropertiesSynthesizer,\
+io.github.loveeleve.polydata.shardingsphere.env.ShardingSphereConfigConfigurationPropertiesSynthesizer,\
+io.github.loveeleve.polydata.datasource.env.DataSourceConfigurationPropertiesSynthesizer,\
+io.github.loveeleve.polydata.mybatis.env.MybatisConfigConfigurationPropertiesSynthesizer,\
+io.github.loveeleve.polydata.mybatisplus.env.MybatisPlusConfigConfigurationPropertiesSynthesizer
+
+# ConfigBeanDefinitionRegistrar
+io.github.loveeleve.polydata.context.ConfigBeanDefinitionRegistrar=\
+io.github.loveeleve.polydata.context.DynamicJdbcConfigBeanDefinitionRegistrar,\
+io.github.loveeleve.polydata.transaction.context.TransactionConfigurationConfigBeanDefinitionRegistrar,\
+io.github.loveeleve.polydata.shardingsphere.context.ShardingSphereConfigurationConfigBeanDefinitionRegistrar,\
+io.github.loveeleve.polydata.mybatis.context.MybatisConfigurationConfigBeanDefinitionRegistrar,\
+io.github.loveeleve.polydata.mybatisplus.context.MybatisPlusConfigurationConfigBeanDefinitionRegistrar
+
+# ParentContextBeanNameGenerator
+io.github.loveeleve.polydata.context.ParentContextBeanNameGenerator=\
+io.github.loveeleve.polydata.transaction.context.PlatformTransactionManagerBeanNameGenerator
