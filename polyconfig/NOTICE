@@ -1,0 +1,14 @@
+PolyConfig
+Copyright 2026 LoveEleve
+
+This product includes software developed as part of the Microsphere Projects
+(https://github.com/microsphere-projects/microsphere-configuration and
+https://github.com/microsphere-projects/microsphere-spring), which is
+licensed under the Apache License, Version 2.0.
+
+The three-layer design (property source meta-annotation, property source
+extension loader template, configuration change events) is inspired by
+microsphere-configuration and microsphere-spring. This product is an
+independent rewrite: it fixes the Nacos annotation spelling issue, redesigns
+the change event model around property-level old/new values, adds a generic
+Spring Cloud EnvironmentChangeEvent adapter, and ships a rewritten test suite.
