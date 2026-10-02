@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.demo</groupId>
+        <artifactId>xhs-demo</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>jdk-lab</artifactId>
+    <name>jdk-lab</name>
+    <description>JDK 机制实验室：反射 / 注解 / 类加载 / 动态代理 等可运行、可观察的最小验证代码</description>
+
+    <properties>
+        <!-- 注意：本模块刻意用 Java 11 目标（父工程默认 17）。
+             原因：JDK 机制实验以干净 JDK11 为口径，class 版本 55 可在 JDK11/17/21 上直接跑，
+             方便做跨版本对照（反射 accessor 通胀等机制在 JDK18 后已改实现）。 -->
+        <java.version>11</java.version>
+    </properties>
+
+    <!-- 纯 JDK，无任何第三方依赖：保证每段代码都能用 javac/java 直接验证 -->
+</project>

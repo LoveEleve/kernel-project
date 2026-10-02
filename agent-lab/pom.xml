@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.demo</groupId>
+        <artifactId>xhs-demo</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>agent-lab</artifactId>
+    <name>agent-lab</name>
+    <description>JVM Agent 学习实验：attach/load、Instrumentation、ASM 字节码织入</description>
+
+    <properties>
+        <!-- 与 jdk-lab 一致：class 目标 11，agent jar 可装载进 JDK11/17/21 的目标进程 -->
+        <java.version>11</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- 字节码读写（织入用） -->
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm</artifactId>
+            <version>9.7</version>
+        </dependency>
+        <!-- 打印事件流用（TraceClassVisitor / ASMifier） -->
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-util</artifactId>
+            <version>9.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-tree</artifactId>
+            <version>9.7</version>
+        </dependency>
+    </dependencies>
+</project>

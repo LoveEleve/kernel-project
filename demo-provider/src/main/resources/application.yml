@@ -1,0 +1,24 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: demo-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848      # 本机 Nacos（见 docs/gateway/infra-nacos.md）
+        # ★ L16 准备：实例 metadata（注册时随实例上报，网关的 LoadBalancer 会读它）
+        metadata:
+          zone: shanghai
+          version: v1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.myxhs.demo: DEBUG

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.demo</groupId>
+        <artifactId>xhs-demo</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>reactor-lab</artifactId>
+    <name>reactor-lab</name>
+    <description>Reactor 实验室：把 Stage 3（L09~L12）的响应式概念拆成能跑、能改、能观察的最小代码</description>
+
+    <properties>
+        <!-- 一键跑全部实验：      mvn -pl reactor-lab exec:java -->
+        <!-- 只跑某一个实验：      mvn -pl reactor-lab exec:java -Dexec.mainClass=com.myxhs.demo.reactor.l09.Ex01_CustomPublisher -->
+        <exec.mainClass>com.myxhs.demo.reactor.LabMain</exec.mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- Reactor 本体（版本由 spring-boot-dependencies 3.2.5 管理 → reactor-core 3.6.5，与 xhs-project 对齐） -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
+        <!-- Reactor Netty（传输层）：L00·0.4.4 的 HttpServer/HttpClient/TcpServer/TcpClient 最小实验 -->
+        <dependency>
+            <groupId>io.projectreactor.netty</groupId>
+            <artifactId>reactor-netty-http</artifactId>
+        </dependency>
+
+        <!-- Spring WebFlux：L00·0.6 的"基本使用"最小实验（不引 Spring Boot） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webflux</artifactId>
+        </dependency>
+        <!-- spring-webflux 对 spring-context 是 optional（只写函数式端点也需要它） -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+
+        <!-- 没有它启动时会有 "SLF4J: No providers found" 噪音 -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+        </dependency>
+
+        <!-- 测试：JUnit5 + AssertJ + spring-test（StepVerifier 不在这里面，见下） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- StepVerifier：把"契约"写成断言（spring-boot-starter-test 不含它，必须显式加） -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>${exec.mainClass}</mainClass>
+                </configuration>
+            </plugin>
+            <!-- 父 POM 未管 surefire 版本（Maven 默认 2.12.4 不支持 JUnit5），显式用 3.x -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

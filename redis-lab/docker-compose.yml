@@ -1,0 +1,36 @@
+services:
+  redis7:
+    image: redis-lab:7
+    container_name: redis-lab-7
+    command: >
+      redis-server
+      --port 6379 --bind 0.0.0.0
+      --appendonly no
+      --maxmemory 128mb --maxmemory-policy noeviction
+      --enable-debug-command yes
+    ports:
+      - "16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+
+  redis8:
+    image: redis-lab:8
+    container_name: redis-lab-8
+    command: >
+      redis-server
+      --port 6379 --bind 0.0.0.0
+      --appendonly no
+      --maxmemory 128mb --maxmemory-policy noeviction
+      --enable-debug-command yes
+    ports:
+      - "16388:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
