@@ -1,0 +1,11 @@
+PolyZone
+Copyright 2026 LoveEleve
+
+This product includes software developed as part of the Microsphere Projects
+(https://github.com/microsphere-projects/microsphere-multiactive), which is
+licensed under the Apache License, Version 2.0.
+
+The design and portions of the implementation of this product are derived from
+microsphere-multiactive. Modifications include module restructuring, property
+namespace changes, failback (originalZone) semantics fixes, removal of
+microsphere-specific dependencies, and a rewritten test suite.
