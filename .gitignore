@@ -8,3 +8,7 @@ target/
 *.log
 logs/
 .DS_Store
+
+# Mirror of https://github.com/LoveEleve/poly-project (standalone published repo,
+# kept here as a nested clone so the whole workspace opens in one IDE)
+poly/
