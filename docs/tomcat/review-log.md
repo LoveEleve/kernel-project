@@ -410,3 +410,245 @@
 ### 结论
 
 **L10 Round 1 通过**（零修正）。下一步：L11 Mapper 匹配主干。
+
+---
+
+## L11 Round 1（2026-09-29，深度 review · Stage 3 第二节）
+
+### 核对方法
+
+- 类名/方法名逐段核对：`Mapper.map`（2 重载）、`internalMap`、`internalMapWrapper`、`internalMapExactWrapper`、`internalMapWildcardWrapper`、`internalMapExtensionWrapper`、`addHost`/`addHostAlias`/`addContextVersion`/`addWrappers`、`removeHost`、`MapperListener.lifecycleEvent/register*/unregister*`、`MappingData` 字段集、`jakarta.servlet.http.MappingMatch` 枚举；
+- 避免 04 篇的已知坑：不引用有歧义的 Rule 5/6/7 编号（只述 Rule 1~4 + DEFAULT），`addWrappers` 分流（`/*`→前缀、`*.`→扩展名、`/`→default）；
+- lab 实测核对：`MappingLabTest` 1/1 通过，数据与正文一致（EXACT→200 / PATH→200 / 默认→404）；
+- 格式检查：fence 偶数；交叉引用（L02/L04/L05）均有对应内容。
+
+### 修正项（0 项——零修正通过）
+
+- 写作阶段已按 04 篇深审结论成文；唯一 deliberate 简化是"有序数组定位"（二分+回退的算法细节留具体实现，概念课不展开）。
+
+### 核对无误
+
+- 查询链类名顺序：`CoyoteAdapter.service` → `postParseRequest` → `Mapper.map` → `internalMap`（先 Host 后 Context）→ `internalMapWrapper`（Rule1→Rule4→DEFAULT）；
+- 数据结构类名与字段：`MappedHost/ContextList/ContextVersion`（四数组）/`MappingData`（host/context/wrapper/wrapperPath/requestPath/pathInfo/matchType…）；
+- 维护机制：`MapperListener` 事件（register/unregister）、不可变数组复制替换读路径无锁；
+- `DispatcherServlet → defaultWrapper`、`register-default-servlet=false` 与 L05 口径一致；
+- lab 实测可复现（`MappingLabTest`: 200/200/404）。
+
+### 结论
+
+**L11 Round 1 通过**（零修正）。下一步：L12 Lifecycle 状态机主干（Stage 3 收官）。
+
+---
+
+## L12 Round 1（2026-09-29，深度 review · Stage 3 收官）
+
+### 核对方法
+
+- 枚举 12 态 + 事件绑定逐项核对（`LifecycleState` / `Lifecycle` 接口常量）；
+- 模板骨架与约定复核（`LifecycleBase` final 方法 + abstract 内部方法 + STARTING 约定 + 两类失败）；
+- 容器启停两条链复核（`StandardServer/StandardService.startInternal` 顺序；`StandardService.stopInternal` 顺序——见 L06）；
+- 格式检查：fence 偶数；类归属表述。
+
+### 修正项（1 处类归属表述）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §4 写 "Tomcat.start()（Spring 侧入口）"——易误读为 `Tomcat` 是 Spring 的类 | 改为"Spring 侧**调用** `Tomcat.start()`（Tomcat 类）→ `getServer().start()`"（`Tomcat.start` 在 Tomcat 侧，`TomcatWebServer` 在 `:128` 处调用它） |
+
+### 核对无误
+
+- 12 态全 + 每个中间态的事件绑定（INITIALIZING←BEFORE_INIT … DESTROYED←AFTER_DESTROY；NEW/FAILED 无绑定；configure_start）；
+- 骨架 `final synchronized` + `xxxInternal` + STARTING 约定 + 受控/非受控失败，与 05 篇一致；
+- 启动链（CONFIGURE_START → 各 Service → engine/executor/mapperListener/connectors）与停止链（停流量 → engine → connector → mapperListener/executor）与 L02/L05/L06 一致；
+- Spring 侧衔接（`WebServerStartStopLifecycle` + L07 另有停机机制）表述无出入。
+
+### 结论
+
+**L12 Round 1 通过**（1 处类归属表述已修正）。**Stage 3（源码主干 L10~L12）全部完成**。下一步：L13 K8s / 云原生（Stage 4 开始）。
+
+---
+
+## L12 Round 2（2026-09-29，深度轮 · 全文通读）
+
+> 触发：用户要求"先深度 review 一轮"。方法：全文逐段通读 + **归因与措辞精确性**（失败时"谁"在清理、"谁"在调用）。
+
+### 修正项（4 处，均已应用）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §1.3 写法与 Round 1 修正后的 §4 口径不一致（仍把 `Tomcat.start()` 写成 Spring 侧机制） | 改为"衔接 Spring 侧：Spring **调用** `Tomcat.start()` 启动整树；`WebServerStartStopLifecycle`（SmartLifecycle）挂生命周期" |
+| 2 | §3 表"失败处理：父组件清理该组件"——**归因偏差**（实际是 `LifecycleBase` 替该组件调 `stop()`，父组件只负责继续启动其它子组件） | §3 表与 Q3 答案同步修正为"基类替该组件调 `stop()` 完成清理，其父组件继续启动其它子组件" |
+| 3 | §2"asymmetry 细节"中英混写且表意含糊 | 改为中文表述，并明确"需先 `stop()` 才能重新启动" |
+| 4 | "需人工/重启恢复"含糊 | 并入修正 3，明确恢复方式 |
+
+### 核对无误
+
+- 官方引文/规范（Round 1 已逐字核对）；
+- 术语对照表与 Self-Test 答案与正文逐项一致；
+- "面试话术产出物（05 篇）"的引用指向确有该内容的 05 篇位置；
+- 格式：代码块偶数；结尾完整。
+
+### 结论
+
+**L12 Round 2 通过**（归因精确性已校准）。Stage 3（L10~L12）全部通过深度审查。下一步：L13 K8s / 云原生。
+
+---
+
+## L13 Round 1（2026-09-29，深度 review · Stage 4 开始）
+
+### 核对方法
+
+- Boot 侧复核：`AvailabilityProbesAutoConfiguration`（开关属性 + K8s 自动探测）、`EventPublishingRunListener` 状态翻转点、状态枚举值、关闭钩子注册——均与 13 篇深审结论一致；
+- lab 数据核对：`KubernetesLabTest` 三组输出、`k8s-jvm-demo.sh` 三组参数对比（3986→1596MB、processors 16→2）；
+- 格式检查：fence 偶数；YAML/输出块完整。
+
+### 修正项（1 处）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §5 basedir 示例写 `/tmp/...`——在"只读根文件系统"语境下有歧义（/tmp 本身不可写时示例误导） | 改为 `<emptyDir 挂载的可写目录>` |
+
+### 核对无误
+
+- 探针三分工与翻转点表述准确（liveness 只做进程级；K8s 环境自动开启；启动完成翻状态）；
+- 资源感知结论（MaxRAMPercentage 而非 Xmx；ActiveProcessorCount；maxThreads 不随 CPU 变）与 lab 实测一致；
+- 优雅下线对齐公式与 L07 一致；SIGTERM/SIGKILL 区分正确；
+- 5 个坑与 5 道 Self-Test 答案逐项成立；lab 数字（1182ms 硬断、docbase 12→13）与实测一致。
+
+### 结论
+
+**L13 Round 1 通过**（无阻断级；1 处示例歧义已修正）。下一步：L14 线上排查。
+
+---
+
+## L14 Round 1（2026-09-29，深度 review）
+
+### 核对方法
+
+- 引文与主张核对：`top` %CPU 单核基准（OS 工具行为，按宿主机逻辑核折算）、GC 判型路径（`jstat -gcutil` / GCT）、线程/堆工具用法（jstack 连抓三次、死锁自动报告、`jmap -histo:live` 的 Full GC 副作用）；
+- 引用一致性：所有"（xx篇/Lxx）"引用逐一核对归属（lessons 用 `Lxx`，面试系列用"xx篇"）；
+- lab 数据核对：`DiagnosticsTest` 三组实测输出逐字对照。
+
+### 修正项（3 处，均已应用）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §1"（09 篇）"未标明归属（lessons 也有 L09，同名易混） | 改为"（见 lessons L09 与面试 09 篇）" |
+| 2 | §3"会话扫描约 60s 一轮，见 08 篇相关机制"——**引用错误**：L08 是异步，与会话扫描无关 | 删去错误引用；结论保留（后台周期性扫描约 60s 一轮） |
+| 3 | fence 偶数性 | 8 个，正常 |
+
+### 核对无误
+
+- CPU 百分比语义（单核基准 100%；200%/800% = 约 2/8 个核吃满；判读除以 `nproc`）；
+- 负向断言：Boot 全仓 0 命中 `JreMemoryLeakPreventionListener`（"内嵌没有独立部署的两道防线"成立，与既有结论一致）；
+- 线程名地图与 L03/L07 口径一致；hang 四线与 L09 口径一致；拖优雅停机联动与 07 篇/lab 实测（44.76s）一致；
+- lab 三组输出逐字一致（`spin(:43)` / `Found 2 Java-level deadlock(s)` / `leakedMb=3 → 0`）；
+- Self-Test 5 题答案与正文逐项一致。
+
+### 结论
+
+**L14 Round 1 通过**（1 处引用错误已修正）。下一步：L15 虚拟线程。
+
+---
+
+## L15 Round 1（2026-09-29，深度 review）
+
+### 核对方法
+
+- javadoc 逐字：Tomcat `VirtualThreadExecutor`、Boot `Threading.VIRTUAL`、customizer（三处）；
+- 行为核对：Boot 注册链与 order、命名规则（`tomcat-handler-N`）、lab A/B 实测（1818ms vs 1009ms、`syncInFlight=2`）；
+- 版本口径：JDK21（JEP 444）/ JDK24（JEP 491）概念引用标注。
+
+### 修正项（1 处措辞）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | "并发闸门变成 `maxConnections`/`acceptCount`"——`acceptCount` 是 OS 连接队列长度，不是并发闸门 | 改为"限制变成 `maxConnections`（连接数）、`acceptCount`（连接队列）、下游超时与限流"（§5 表 + Q1 同步） |
+
+### 核对无误
+
+- 3 处 javadoc 引文准确（"每任务一虚拟线程"、"JDK21+ 双条件"、"在协议处理器上启用"+order+1）；
+- 命名规则（`Thread.ofVirtual().name(prefix, 0)`）与 lab 线程名一致；
+- lab 数据与实测一致；JDK17 自动 Skip 机制与全量无回归一致；
+- 格式：fence 偶数；结尾完整。
+
+### 结论
+
+**L15 Round 1 通过**（1 处措辞已修正）。下一步：L16 Boot 2→3 / jakarta 迁移（收官）。
+
+---
+
+## L15 Round 2（2026-09-29，深度轮 · 全文通读 + 跨轨道引用检查）
+
+> 触发：用户要求"先深度 review 一轮"。方法：全文逐段通读 + **全 lessons 扫描"N篇"引用**（lessons 用 `LNN`、面试系列用"N篇"，两套编号并存，必须消歧）。
+
+### 修正项（2 处，均已应用）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | **引用串台（关键）**：L15 §0 前置写"L11 引用（线程名）"——lesson 体系里 L11 是 **Mapper 课**，线程名实际是 **L03** 教的（"11"指的是面试 11 篇，造成串台） | 改为前置"L03（线程模型与线程名地图）" |
+| 2 | L10 注释"(09 篇)"含义模糊（同一含义在 L14 已规范为"面试 09 篇"） | 改为"（面试 09 篇；限流语义见 lessons L09）"，与既定消歧惯例对齐 |
+
+### 全轨道引用核对（通过）
+
+- 全 lessons 扫描"N篇"引用：L10（已修正）、L12:100"05 篇排障线索"（面试 05 确有该节 ✓）、L14:26（已消歧 ✓）；其余均为 `LNN` 内部引用且目标课存在；
+- L15 其余内容（引文/实测/术语/Self-Test）Round 1 已核，本轮无新增问题。
+
+### 结论
+
+**L15 Round 2 通过**（跨轨道引用已消歧）。下一步：L16（收官）。
+
+---
+
+## L16 Round 1（2026-09-29，深度 review · 收官）
+
+### 核对方法
+
+- 引文核对：`spring-boot-properties-migrator` 包说明逐字；版本矩阵标注"公开版本对应"；
+- 前置引用核对：L16 §0 引用的出处（L01/L04）逐一验证存在；
+- lab 数据核对：`MigrationLabTest` 2 组输出（200 / 400）与正文一致；
+- 格式：fence 偶数；结尾"Stage 4 完成 + Stage 5"正确。
+
+### 修正项（1 处）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §0 前置写"L06（版本引用：Servlet 6.0）"——**L06 根本没讲版本号**，Servlet 6.0 出处是 **L01 §2** | 改为"L01（组件；版本引用：Servlet 6.0）、L04（Filter）" |
+
+### 核对无误
+
+- migrator 引文逐字；版本矩阵（Boot 2.7 vs 3.x）与公开口径一致，文内已标注；
+- lab 数据一致；Self-Test 5 题答案与正文逐项一致；
+- Stage 4 四课（L13~L16）引用链闭合（L16 → Stage 5）。
+
+### 结论
+
+**L16 Round 1 通过**（1 处前置引用修正）。**Stage 4（L13~L16）全部完成** → 全部 16 课（L01~L16）完成。下一步：Stage 5 产出（`architecture-map`）。
+
+---
+
+## Stage 5 Round 1（2026-09-29，深度 review · 产出物）
+
+### 核对方法
+
+- 双向校验表逐行核对：map 14 处引用 → 面试篇存在且主题对版；面试篇 14 处落点 → map 确有对应内容；
+- 引用消歧检查：`LNN`（lessons）vs "N篇"（面试系列）——全 map 扫描；
+- 新增主张核对：凡 map 中首次出现的主张必须有来源课。
+
+### 修正项（3 处，均已应用）
+
+| # | 问题 | 修正 |
+|---|---|---|
+| 1 | §1 D 组含 **Session**——全 lessons 仅 L14 提过一次（内存嫌疑对象），无专课覆盖，违反"双向闭合" | D 组改为 Lifecycle / 指标（JMX/actuator） |
+| 2 | 定制行写"L10（ProtocolHandler 定制）"——L10 是 Connector/Endpoint 主干课，定制点在 **10 篇** | 两处（正反表）统一为"（定制点见 10 篇）" |
+| 3 | （扫描确认）其余引用全部对版，无悬空 | — |
+
+### 核对无误
+
+- 组件树/请求链/三张图/12 张速记卡与 L01~L16 口径一致；
+- 14 篇双向表：正向 14 行、反向 14 行全部闭合（每篇都有落点、每处引用都有篇）；
+- 格式：fence 偶数；结尾完整。
+
+### 结论
+
+**Stage 5 Round 1 通过**（双向闭合成立）。**Tomcat 学习课 L01~L16 + architecture-map 全部完成并通过审查** 🎉

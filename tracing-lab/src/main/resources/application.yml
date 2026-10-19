@@ -1,0 +1,30 @@
+server:
+  port: 28030
+
+spring:
+  application:
+    name: tracing-lab
+
+logging:
+  level:
+    com.scalab.tracing: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  tracing:
+    sampling:
+      probability: 1.0
+    propagation:
+      type: W3C,B3
+    baggage:
+      enabled: true
+      # Boot 3.2.5 仅支持 remote-fields（local-fields/tag-fields 是更新版本/手动构造才有的概念）
+      remote-fields: tenant-id,region,session-id
+      correlation:
+        enabled: true
+        fields: tenant-id,region,session-id

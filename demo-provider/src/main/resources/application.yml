@@ -12,6 +12,11 @@ spring:
         metadata:
           zone: shanghai
           version: v1
+    # ★ L45 实验 C：服务层 Sentinel（eager 启动初始化；transport 端口与网关 8719 错开）
+    sentinel:
+      eager: true
+      transport:
+        port: 8720
 
 management:
   endpoints:

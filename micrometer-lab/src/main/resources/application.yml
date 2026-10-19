@@ -1,0 +1,26 @@
+server:
+  port: 28020
+
+spring:
+  application:
+    name: micrometer-lab
+
+logging:
+  level:
+    com.scalab.micrometer: DEBUG
+
+# A-05: 暴露 Prometheus 端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: micrometer-lab
+  observations:
+    annotations:
+      enabled: true   # Boot 3.2.5 默认 false——@Timed/@Counted 切面需显式开启（MetricsAspectsAutoConfiguration 条件）

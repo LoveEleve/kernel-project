@@ -3,7 +3,7 @@
 > 与 [`../gateway-学习清单.md`](../gateway-学习清单.md) 配套使用。
 > **命名规则：`Lxx-<slug>.md`，`xx` = 课号** —— 本目录按文件名排序即为课程顺序。
 
-## 一、已写出正文（L00 ~ L30）
+## 一、已写出正文（L00 ~ L40）
 
 | 课号 | 文件 | 内容速览 |
 |---|---|---|
@@ -36,6 +36,16 @@
 | L28 | `L28-request-body-once.md` | body 只能读一次 |
 | L29 | `L29-sticky-session.md` | 粘性会话 |
 | L30 | `L30-dynamic-route-refresh.md` | 动态路由刷新（Stage 5 收官） |
+| L36 | `L36-rate-limiting.md` | 限流：Redis+Lua 令牌桶 / `KeyResolver` / 架构取舍（Stage 7 开篇） |
+| L37 | `L37-circuit-breaker-retry.md` | 熔断三态 + 重试幂等 + 治理四件套（超时→重试→熔断→限流） |
+| L38 | `L38-response-cache-body-rewrite.md` | 响应缓存（Cache-Control 规则/本地缓存边界）+ body 改写（Java DSL） |
+| L39 | `L39-security-transport.md` | 认证（token 校验 vs OAuth2 客户端）+ SecureHeaders + TLS 终止 + HTTP/2 |
+| L40 | `L40-gateway-selection-boundaries.md` | 选型（SCG vs Nginx vs APISIX/Kong）+ 边界（XSS/大文件/长事务）+ 职责划分 |
+| L43 | `L43-polygateway-extension.md` | polygateway 端点级路由扩展（provider 发布六维 metadata / 网关生成官方路由 / 心跳刷新 / 服务作用域排除；32 测试 + 真实 Nacos 实测） |
+| L42/L46 | `xhs-gateway-zone.md` | 网关侧 Zone 多活适配解读（xhs-gateway zone 包 4 文件：注册/装配/supplier/filter + 取值链 bug；前置案例） |
+| L44 | `L44-nacos.md` | Gateway × Nacos：自动路由（服务发现）+ 配置中心动态路由（方案 B 实现）+ 宕机降级（快照/自动重连；含三组实测） |
+| L45 | `L45-sentinel.md` | Gateway × Sentinel：功能重叠对照 + 选型 + 分层限流；5 组实测（T-106 默认 Handler 兼容坑 / 双回调 / 参数级限流 / 网关 vs 服务分层 / Nacos 规则源热更新 + RT 熔断） |
+| L46 | `L46-sclb.md` | Gateway × SCLB 深入：`lb://` 链路（filter→factory→supplier 洋葱→LB）+ 策略选择（RR / Nacos 权重 / 自研最少连接）+ 实例摘除三来源（实测 Nacos 1.4s vs 网关 35s 缓存窗口） |
 
 ## 二、辅助文档（非课程，无课号）
 
@@ -45,12 +55,8 @@
 | `concept-index.md` | 概念索引（全局） |
 | `infra-nacos.md` | 本地 Nacos 环境笔记（Docker） |
 | `production-gateway-capabilities.md` | 生产级网关能力全景（面试素材） |
-
-## 三、素材（未来课）
-
-| 文件 | 说明 |
-|---|---|
-| `L43-microsphere-gateway-extension.md` | L43 素材：microsphere-gateway 端点级路由扩展 |
+| `rate-limiting-concepts.md` | **限流专题**（概念/算法/分布式/架构，L36 配套深挖） |
+| `circuit-breaker-concepts.md` | **弹性模式专题**（熔断/重试/舱壁/阈值/业界对照，L37 配套深挖） |
 
 ---
 

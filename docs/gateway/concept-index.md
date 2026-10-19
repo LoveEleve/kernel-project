@@ -30,11 +30,11 @@
 | Spring WebFlux | ✅ | 已在 **Lesson 00 · 0.6** 补（含 MVC ↔ WebFlux 对照表）；**Reactor 分 4 课**（见 **Lesson 09~12**）；WebFlux 请求管线见 **Lesson 18** |
 | Spring MVC | ✅ | 已在 **Lesson 00 · 0.6** 以对照表形式覆盖 |
 | Project Reactor | ⏳ | **Lesson 09~12**（契约/算子/背压调度/Context·Sinks） |
-| 服务发现（service discovery） | ⏳ | **Lesson 16**（自定义 LB）+ **L45**（Nacos 打通） |
-| 灰度 / 版本路由 | ⏳ | **Lesson 16**（Gray/Zone）+ **L43**（SCLB） |
+| 服务发现（service discovery） | ✅ | **Lesson 16**（自定义 LB）+ **L44**（Nacos 打通） |
+| 灰度 / 版本路由 | ⏳ | **Lesson 16**（Gray/Zone）+ **L43**（polygateway 端点级路由） |
 | JWT | 🌐 | 安全知识域；本课只需知道"网关做 JWT 鉴权" |
 | HMAC / nonce | 🌐 | 安全知识域 |
-| Sentinel | 🌐 | 独立框架（Sentinel 卷） |
+| Sentinel | 🌐 | 独立框架（Sentinel 卷）；**网关集成见 L45**（raw adapter + `GatewayFlowRule` + Nacos 规则源 + 双 BlockHandler） |
 | MeterRegistry | 🌐 | 可观测知识域 |
 | TraceId | 🌐 | 可观测知识域 |
 

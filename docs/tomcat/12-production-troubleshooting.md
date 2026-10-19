@@ -1,4 +1,4 @@
-# 面试题详解 12 | 线上排查实战（CPU 100% / 内存泄漏 / 请求 hang）
+# 面试题详解 12 | 线上排查实战（CPU 飙高 / 内存泄漏 / 请求 hang）
 
 > 难度：★★★★★ ｜ 频率：★★★★★ ｜ 区分度：极高（会不会"看现场"，一道题见功底）
 > 关键词：top -H、jstack、ThreadMXBean、jmap/MAT、arthas、线程名地图、JreMemoryLeakPreventionListener、ThreadLocal、死锁、慢下游
@@ -7,7 +7,7 @@
 
 ## 问题
 
-**线上 Tomcat 出现 CPU 100%、内存持续增长、请求大量 hang，你从哪一步开始查？怎么把 jstack/MAT 看到的线程与对象，映射回 Tomcat 的组件（Acceptor/Poller/Worker/容器）？**
+**线上 Tomcat 出现 CPU 飙高、内存持续增长、请求大量 hang，你从哪一步开始查？怎么把 jstack/MAT 看到的线程与对象，映射回 Tomcat 的组件（Acceptor/Poller/Worker/容器）？**
 
 ---
 
@@ -32,7 +32,7 @@
 | `Timer-*`/`Catalina-utility-*` | 后台周期性任务（session 扫描等） | 11 篇的 60s 会话扫描 |
 | `tomcat-handler-N`（虚拟线程模式） | 虚拟线程 worker（11 篇） | 看不到"池满"，但 pin 会占用载体 |
 
-### 2）案例 A：CPU 100%
+### 2）案例 A：CPU 飙高
 
 ```
 top -H -p <pid>                       # 找到高 CPU 的线程 id（十进制）
@@ -110,7 +110,7 @@ jmap -histo:live <pid> | head -20            # 快照：谁的实例数/占用�
 
 ## 必须明确的边界
 
-- CPU 100% **先排除 GC**（不然会查错方向）；
+- CPU 飙高**先排除 GC**（不然会查错方向）；
 - 一次 `jstack` 不够（连抓 3 次看栈是否滞留）；
 - `-histo:live` 会触发 Full GC，生产谨慎；
 - **Boot 内嵌没有** `JreMemoryLeakPreventionListener`/`ThreadLocalLeakPreventionListener`（那是独立部署防线）；
@@ -134,7 +134,7 @@ jmap -histo:live <pid> | head -20            # 快照：谁的实例数/占用�
 
 ## 追问与参考回答
 
-**追问 1：CPU 100% 怎么区分是 GC 还是业务？**
+**追问 1：CPU 飙高怎么区分是 GC 还是业务？**
 > 并行看 `jstat -gcutil`：`GCT` 占比高、`FGC` 频繁 → GC 型，去查内存/分配；GC 正常而热点栈顶是应用方法 → 业务型（死循环/正则/Schema 校验等）。Tomcat 自身 Poller 是 `select(timeout)` 阻塞模型（`NioEndpoint:755`），不是常见元凶。
 
 **追问 2：内存泄漏怎么快速定位？**
@@ -192,7 +192,7 @@ jmap -histo:live <pid> | head -20            # 快照：谁的实例数/占用�
 
 ## 个人经历填充区（留空，按真实项目补）
 
-- 排查过 CPU 100%/内存泄漏吗？现场是怎么采样的、根因是什么？
+- 排查过 CPU 飙高/内存泄漏吗？现场是怎么采样的、根因是什么？
 - 用过 arthas/JFR 做生产诊断吗？有什么坑（性能/快照大小）？
 
 ## 真实性说明

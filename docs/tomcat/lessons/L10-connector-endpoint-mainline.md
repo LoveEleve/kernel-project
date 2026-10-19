@@ -105,7 +105,7 @@ Endpoint.start()
 
 ```
 Acceptor.run（循环）
-  → countUpOrAwaitConnection()        ← LimitLatch：满则阻塞（09 篇）
+  → countUpOrAwaitConnection()        ← LimitLatch：满则阻塞（面试 09 篇；限流语义见 lessons L09）
   → serverSocketAccept()              ← 拿新连接
   → setSocketOptions() + Poller.register()   ← 登记 OP_READ 就绪兴趣
 

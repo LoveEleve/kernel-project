@@ -19,6 +19,16 @@
         <module>tomcat-lab</module>
         <module>reactor-lab</module>
         <module>leetcode-lab</module>
+        <module>openfeign-lab</module>
+        <module>nacos-lab</module>
+        <module>sentinel-lab</module>
+        <module>seata-lab</module>
+        <module>rocketmq-lab</module>
+        <module>micrometer-lab</module>
+        <module>tracing-lab</module>
+        <module>loadbalancer-lab</module>
+        <module>dist-consistency-lab</module>
+        <module>es-lab</module>
     </modules>
 
     <properties>

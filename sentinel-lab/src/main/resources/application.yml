@@ -1,0 +1,29 @@
+server:
+  port: 28011
+
+spring:
+  application:
+    name: sentinel-lab
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 21.130.247.89:18848
+        namespace: sca-lab-dev
+        enabled: true
+    sentinel:
+      # 提前初始化 Sentinel（默认懒加载，需等第一个请求才初始化）
+      eager: true
+      transport:
+        # Sentinel Dashboard 地址（21.130.247.89:8858，已部署）
+        dashboard: 21.130.247.89:8858
+        port: 8719
+
+logging:
+  level:
+    com.scalab.sentinel: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

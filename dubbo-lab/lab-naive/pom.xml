@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.dubbo</groupId>
+        <artifactId>dubbo-lab</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>lab-naive</artifactId>
+    <name>lab-naive</name>
+    <description>第 01 篇实验：手写最简 RPC（动态代理 + Java 序列化 + Socket），零第三方依赖</description>
+
+    <properties>
+        <lab.mode>client</lab.mode>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.myxhs.dubbo</groupId>
+            <artifactId>lab-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>-Dlab.mode=${lab.mode}</argument>
+                        <argument>com.myxhs.dubbo.lab.naive.NaiveRpcApp</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

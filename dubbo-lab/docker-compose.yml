@@ -1,0 +1,10 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: nacos
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+    ports:
+      - "8848:8848"
+      - "9848:9848"

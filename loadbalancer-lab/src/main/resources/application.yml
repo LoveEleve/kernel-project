@@ -1,0 +1,35 @@
+server:
+  port: 28010
+
+spring:
+  application:
+    name: loadbalancer-lab
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 21.130.247.89:18848
+        namespace: sca-lab-dev
+        enabled: true
+    loadbalancer:
+      # A-01/A-02: 负载均衡策略（round-robin 默认 / random）
+      # A-04~A-11: Supplier 链配置（zone-preference / health-check / weighted / subset / ...）
+      # configurations: round-robin
+      cache:
+        enabled: true
+      retry:
+        # A-12: retryableStatusCodes 默认是空集合，500 默认不重试，必须显式配置
+        retryable-status-codes: 500
+        # enabled 默认 true；max-retries-on-same-service-instance 默认 0；
+        # max-retries-on-next-service-instance 默认 1（启动参数可覆盖对比验证）
+
+logging:
+  level:
+    com.scalab.loadbalancer: DEBUG
+
+# A-16: 暴露 metrics 端点供 MicrometerStatsLoadBalancerLifecycle 指标验证
+# stats.micrometer.enabled 默认 false，需显式开启（D6 分析过）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

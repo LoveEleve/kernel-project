@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.demo</groupId>
+        <artifactId>xhs-demo</artifactId>
+        <version>1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>polygateway-lab</artifactId>
+    <packaging>pom</packaging>
+    <name>polygateway-lab</name>
+    <description>polygateway 真实环境实验：真实 Nacos 注册发现 + 端点级路由（独立 POM，不加入 xhs-demo reactor）</description>
+
+    <modules>
+        <module>lab-provider</module>
+        <module>lab-gateway</module>
+    </modules>
+
+    <properties>
+        <!-- 先执行：mvn -f source-code/poly/polygateway/pom.xml install -->
+        <polygateway.version>1.0.0-SNAPSHOT</polygateway.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.github.loveeleve</groupId>
+                <artifactId>polygateway-spring-boot</artifactId>
+                <version>${polygateway.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

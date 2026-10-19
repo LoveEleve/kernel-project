@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.demo</groupId>
+        <artifactId>xhs-demo</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>loadbalancer-lab</artifactId>
+    <name>loadbalancer-lab</name>
+    <description>Spring Cloud LoadBalancer 学习模块 — 负载均衡（自 sca-lab 迁入；SC 2023.0.3 → spring-cloud-loadbalancer 4.1.4；C 手写已删）</description>
+
+    <properties>
+        <!-- 默认排除 real 集成测试；-Dexclude.groups= 覆盖为全部运行 -->
+        <exclude.groups>real</exclude.groups>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Cloud LoadBalancer 核心（版本由 xhs-demo 父 POM 的 SC BOM 管理） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+
+        <!-- Nacos 服务发现（从注册中心拉实例） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
+        <!-- Web (RestTemplate/RestClient 场景) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Actuator（健康检查端点 /actuator/health） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- A-12: 重试机制（RetryTemplate 在 classpath 才激活 RetryInterceptorAutoConfiguration） -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <!-- 默认排除 real 集成测试（依赖 Nacos + nacos-lab 环境）。
+                         真实环境运行:
+                           mvn test -Dexclude.groups=                    (跑全部)
+                           mvn test -Dtest=A01RealNacosIntegrationTest -Dexclude.groups=  (只跑真实) -->
+                    <excludedGroups>${exclude.groups}</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

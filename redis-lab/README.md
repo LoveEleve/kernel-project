@@ -23,7 +23,12 @@
 | `scripts/04-slow-ops.sh` | 02 慢操作 | `HGETALL` vs `HSCAN`、`KEYS` vs `SCAN` 的阻塞对照（30 万级，结束自动清空） |
 | `scripts/05-advanced.sh` | 04 高级结构 | Stream PEL 生命周期、Bitmap 位寻址、HLL 稀疏→稠密、Geo score=geohash |
 | `scripts/06-persistence-replication.sh` | 05 持久化与复制 | BGSAVE/fork/COW 观测、AOF 多部文件（base/incr/manifest）与重写、PSYNC 主从全量+增量 |
-| （后续）`06-pipeline-vs-loop.sh` | 07 | 逐条 vs Pipeline 的 RTT 放大对照 |
+| `scripts/07-sentinel-cluster.sh` | 06 哨兵与集群 | 3 哨兵故障转移（kill 主 → 自动选主）、3 节点 Cluster 槽分布与 MOVED 重定向 |
+| `scripts/08-memory-management.sh` | 07 内存管理 | allkeys-lru 淘汰 + noeviction OOM、LFU 热键保护、惰性/定期过期、碎片率与 activedefrag 默认 |
+| `scripts/09-transaction-pubsub-tracking.sh` | 08 事务/PubSub/客户端缓存 | MULTI/EXEC 三种结局 + WATCH CAS、订阅/模式广播、tracking RESP3 失效推送原始字节、SLOWLOG |
+| `scripts/10-cache-patterns.sh` | 09 缓存四问 | 空值缓存、SET NX PX 互斥锁 + Lua 释放、领券 Lua 原子、TTL 随机偏移对照 |
+| `scripts/11-distributed-lock.sh` | 10 分布式锁 | 租约死结（PX 过期互斥被打破）、看门狗续期模拟、可重入 Hash 计数、Redlock 3 实例多数派 |
+| （后续）`12-pipeline-vs-loop.sh` | 07 | 逐条 vs Pipeline 的 RTT 放大对照 |
 
 ## 运行方式
 

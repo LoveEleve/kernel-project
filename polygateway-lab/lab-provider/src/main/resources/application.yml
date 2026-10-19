@@ -1,0 +1,27 @@
+server:
+  port: 8181
+  servlet:
+    context-path: /api          # 验证 polygateway.context-path metadata 与 StripPrefix=1 的组合
+
+spring:
+  application:
+    name: lab-provider         # 第二个实例用 --spring.application.name=lab-audit 启动即可模拟"另一服务"
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+polygateway:
+  provider:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.myxhs.demo: DEBUG
+    io.github.loveeleve.polygateway: DEBUG

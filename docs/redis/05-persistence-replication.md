@@ -72,7 +72,7 @@ struct saveparam {
 };
 ```
 
-默认规则是 `save 3600 1 300 100 60 10000`（1 小时内 1 次变更 / 5 分钟 100 次 / 1 分钟 10000 次）。另外 `SAVE`（阻塞主线程，禁止在生产用）和 `BGSAVE`（`rdb.c:3621`、`3639`）可手动触发。
+默认规则是 `save 3600 1 300 100 60 10000`（`server.c:2078-2080`；1 小时内 1 次变更 / 5 分钟 100 次 / 1 分钟 10000 次）。另外 `SAVE`（阻塞主线程，禁止在生产用）和 `BGSAVE`（`rdb.c:3621`、`3639`）可手动触发。
 
 ### 3.2 fork + COW：快照为什么"不停机"
 
@@ -229,7 +229,7 @@ int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
 
 优先级：**整数编码 > LZF 压缩（>20B 才尝试）> 原样存储**。
 
-**每个键**（`rdbSaveKeyValuePair`，`rdb.c:1125-1157`，节选）：
+**每个键**（`rdbSaveKeyValuePair`，`rdb.c:1125-1158`，节选）：
 
 ```c
     /* Save the expire time */
@@ -336,7 +336,7 @@ int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
 ```
 
 - `always`：每次写完立即 `fdatasync`，失败直接退出（"确认过的写必须在盘上"）；性能最差；
-- `everysec`（默认）：**后台线程每秒 fsync**（`aof_background_fsync`，`aof.c:926`）；若上次 fsync 未完成且延迟 <2 秒则推迟写入（`aof.c:1097-1114`），最坏丢 1 秒；
+- `everysec`（默认）：**后台线程每秒 fsync**（`aof_background_fsync`，`aof.c:926`）；若上次 fsync 未完成且延迟 <2 秒则推迟写入（`aof.c:1099-1119`），最坏丢 1 秒；
 - `no`：交给操作系统（Linux 约 30 秒刷一次）。
 
 ### 4.2 重写：从内存重生成，而不是读旧文件
@@ -493,7 +493,7 @@ rename 新 base + 更新 manifest（`persistAofManifest`，`aof.c:600`），旧�
                           server.replid,offset);
 ```
 
-**`+FULLRESYNC <replid> <offset>`**：从节点记住它；RDB 传输期间主节点的新写同时进入**复制缓冲区**（挂在 replica client 的输出缓冲上）→ RDB 加载完后继续发送 → 从节点进入 online。从节点侧加载在 `readSyncBulkPayload`（`replication.c:1868` 起）。
+**`+FULLRESYNC <replid> <offset>`**：从节点记住它；RDB 传输期间主节点的新写同时进入**复制缓冲区**（共享的 `repl_buffer_blocks`，从节点按引用读取）→ RDB 加载完后继续发送 → 从节点进入 online。从节点侧加载在 `readSyncBulkPayload`（`replication.c:1868` 起）。
 
 ### 5.2 增量与断线重连：backlog
 
@@ -537,7 +537,7 @@ void feedReplicationBuffer(char *s, size_t len) {
             ...
 ```
 
-**所有复制流都经过这里**：`master_repl_offset`（全局复制偏移）与 `histlen` 同步增长，数据同时分发给每个从节点——所以 backlog 是"最近一段复制流的环形缓冲"。
+**所有复制流都经过这里**：`master_repl_offset`（全局复制偏移）与 `histlen` 同步增长，数据同时分发给每个从节点——所以 backlog 是"最近一段复制流的可定位缓冲"——7.x 用引用计数的复制缓冲块（`replBufBlock`）+ 索引实现，按 offset 快速定位（`createReplicationBacklogIndex`，`replication.c:171`）。
 
 **重连时判定**（`masterTryPartialResynchronization`，`replication.c:743-800`，节选）：
 
@@ -584,7 +584,7 @@ void feedReplicationBuffer(char *s, size_t len) {
 
 ## 附录 A：面试速答（附带）
 
-> RDB 是 fork 子进程做的全量快照：fork 后父子共享只读页，主进程写谁就复制谁（COW），所以子进程看到的是 fork 瞬间的数据；fork 本身会短暂阻塞主线程（毫秒级）、快照期间写入量大时内存峰值接近 2 倍。文件格式是魔数 REDIS0011 + SELECTDB/键值对 + EOF + CRC64，键值对里长度用 1/2/5/9 字节紧凑编码、字符串能当整数就当整数、大字符串可选 LZF。AOF 是命令日志：每条写命令进 aof_buf，fsync 三档——always 每条刷、everysec 后台每秒刷（最多丢 1 秒）、no 交给 OS；文件大了 BGREWRITEAOF：先开新的 incr 文件、再 fork 子进程从内存当前状态生成最小命令集（多条 INCR 合成一条 SET），完成后 rename + 更新 manifest 原子替换；7.x 是 base+incr+manifest 多部结构，默认 aof-use-rdb-preamble 让 base 是 RDB（混合持久化）。主从复制：从发 PSYNC replid offset，主先试增量——replid 一致且 offset 在 repl_backlog（默认 1MB 环形缓冲，所有写命令经 feedReplicationBuffer 同时进 backlog 和每个从的缓冲）范围内就 +CONTINUE 补差量，否则 +FULLRESYNC 走全量（复用 BGSAVE，可无盘直发 socket）；复制是异步的，写主读从有延迟，等确认要用 WAIT。
+> RDB 是 fork 子进程做的全量快照：fork 后父子共享只读页，主进程写谁就复制谁（COW），所以子进程看到的是 fork 瞬间的数据；fork 本身会短暂阻塞主线程（毫秒级）、快照期间写入量大时内存峰值接近 2 倍。文件格式是魔数 REDIS0011 + SELECTDB/键值对 + EOF + CRC64，键值对里长度用 1/2/5/9 字节紧凑编码、字符串能当整数就当整数、大字符串可选 LZF。AOF 是命令日志：每条写命令进 aof_buf，fsync 三档——always 每条刷、everysec 后台每秒刷（最多丢 1 秒）、no 交给 OS；文件大了 BGREWRITEAOF：先开新的 incr 文件、再 fork 子进程从内存当前状态生成最小命令集（多条 INCR 合成一条 SET），完成后 rename + 更新 manifest 原子替换；7.x 是 base+incr+manifest 多部结构，默认 aof-use-rdb-preamble 让 base 是 RDB（混合持久化）。主从复制：从发 PSYNC replid offset，主先试增量——replid 一致且 offset 在 repl_backlog（默认 1MB，所有写命令经 feedReplicationBuffer 同时进 backlog 和从节点的共享复制缓冲）范围内就 +CONTINUE 补差量，否则 +FULLRESYNC 走全量（复用 BGSAVE，可无盘直发 socket）；复制是异步的，写主读从有延迟，等确认要用 WAIT。
 
 ## 附录 B：实验与复现
 
@@ -597,7 +597,7 @@ bash scripts/06-persistence-replication.sh redis-lab-7   # 输出见 evidence/06
 |---|---|
 | RDB fork/COW | 1 万键后 `rdb_changes_since_last_save=10000` → `BGSAVE` → `0`；`latest_fork_usec=820`；`rdb_last_cow_size=684032`；`/dump.rdb` 127,969 字节 |
 | AOF 多部文件 | `appendonly.aof.1.base.rdb` + `.1.incr.aof` + `manifest`（`type b` / `type i`）；重写后 seq → 2；`aof_base_size = aof_current_size = 171776` |
-| 主从全量 | 从：`master_link_status:up`、`slave_repl_offset=1420404`；主：`connected_slaves:1`、`slave0 ... state=online`；从 `DBSIZE=15000` |
+| 主从全量 | 从：`master_link_status:up`、`slave_repl_offset=1892216`；主：`connected_slaves:1`、`slave0 ... state=online`；从 `DBSIZE=15000` |
 | 主从增量 | 写主 → 读从 `hello-from-master`；`WAIT 1 100 → 1` |
 
 ## 附录 C：源码坐标系（本文引用）
@@ -605,6 +605,7 @@ bash scripts/06-persistence-replication.sh redis-lab-7   # 输出见 evidence/06
 | 内容 | 坐标 |
 |---|---|
 | save 规则结构 / 重试延迟 | `server.h:1287-1290`、`server.h:130` |
+| 默认 save 规则 | `server.c:2078-2080` |
 | serverCron 触发判定 | `server.c:1397-1415` |
 | `SAVE` / `BGSAVE` 命令 | `rdb.c:3621`、`rdb.c:3639` |
 | `rdbSaveBackground`（fork） | `rdb.c:1559-1591`（fork `1568`、COW 上报 `1576`） |
@@ -615,7 +616,7 @@ bash scripts/06-persistence-replication.sh redis-lab-7   # 输出见 evidence/06
 | `rdbSaveType`（1 字节） | `rdb.c:116-118` |
 | `rdbSaveLen`（长度四档） | `rdb.c:172-203` |
 | `rdbSaveRawString`（整数/LZF/原样） | `rdb.c:442-471` |
-| `rdbSaveKeyValuePair`（过期/类型/键/值） | `rdb.c:1125-1157` |
+| `rdbSaveKeyValuePair`（过期/类型/键/值） | `rdb.c:1125-1158` |
 | `rdbSaveObjectType`（类型映射） | `rdb.c:661-690` |
 | `rdbSaveInfoAuxFields`（AUX 元信息） | `rdb.c:1193-1210` |
 | AOF 状态 / fsync 枚举 | `server.h:312-314`、`server.h:527-529` |
@@ -624,13 +625,13 @@ bash scripts/06-persistence-replication.sh redis-lab-7   # 输出见 evidence/06
 | `rewriteAppendOnlyFileBackground`（新 incr + fork） | `aof.c:2427-2493`（fork `2464`、COW `2474`） |
 | `openNewIncrAofForAppend`（重写期新写入落点） | `aof.c:792-855`（注释 `779`） |
 | `rewriteAppendOnlyFileRio`（从内存重生成） | `aof.c:2237-2290` |
-| 混合持久化（RDB preamble） | `aof.c:2368-2378` |
+| 混合持久化（RDB preamble） | `aof.c:2370-2378` |
 | `backgroundRewriteDoneHandler`（rename + manifest） | `aof.c:2584-2707`（rename `2612`、manifest `2666-2678`） |
 | 多部 AOF 命名注释 / manifest 持久化 | `aof.c:420-438`、`aof.c:600` |
 | AOF/复制默认配置 | `config.c:3077`（preamble=yes）、`3088`（appendonly=no）、`3139`（everysec）、`3211`（backlog 1mb）、`3071`（diskless=yes） |
-| `syncCommand`（PSYNC 分支/全量准备） | `replication.c:940-1057`（partial `1018`、全量 `1043-1057`） |
+| `syncCommand`（PSYNC 分支/全量准备） | `replication.c:940-1057`（partial `1018`、全量 `1042-1057`） |
 | `replicationSetupSlaveForFullResync`（+FULLRESYNC） | `replication.c:714-740`（`728`） |
-| `masterTryPartialResynchronization`（backlog 判定） | `replication.c:743-800`（`777-789`） |
+| `masterTryPartialResynchronization`（backlog 判定） | `replication.c:743-800`（`780-792`） |
 | `startBgsaveForReplication`（disk/diskless） | `replication.c:859-930`（`868`） |
 | `feedReplicationBuffer`（offset/backlog/分发） | `replication.c:334-424` |
 | `replBacklog` 结构 / 创建 | `server.h:1112-1121`、`replication.c:121` |

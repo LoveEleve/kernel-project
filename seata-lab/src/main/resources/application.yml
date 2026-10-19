@@ -1,0 +1,39 @@
+server:
+  port: 28041
+
+spring:
+  application:
+    name: seata-lab
+  datasource:
+    url: jdbc:mysql://21.130.247.89:13306/seata_lab?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: Xhs@2026#MySQL
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+seata:
+  enabled: true
+  application-id: seata-lab
+  tx-service-group: default_tx_group
+  service:
+    vgroup-mapping:
+      default_tx_group: default
+    grouplist:
+      default: 21.130.247.89:27091
+  config:
+    type: file
+  registry:
+    type: file
+  client:
+    undo:
+      log-table: undo_log
+
+logging:
+  level:
+    com.scalab.seata: DEBUG
+    io.seata: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

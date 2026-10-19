@@ -1,0 +1,50 @@
+server:
+  port: 8180
+
+spring:
+  application:
+    name: lab-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        register-enabled: false    # 网关不注册自己（与 demo-gateway 口径一致）
+        # ★ SCA 2023：NacosDiscoveryHeartBeatPublisher 是条件创建的（heart-beat=true / locator=true / Boot Admin 三选一）
+        #   我们把 locator 关了（避免官方服务级路由），必须显式打开心跳，polygateway 的路由刷新依赖 HeartbeatEvent
+        heart-beat:
+          enabled: true
+    gateway:
+      discovery:
+        locator:
+          enabled: false           # 关掉官方"服务级"自动路由，只留 polygateway 的"端点级"路由
+
+polygateway:
+  gateway:
+    enabled: true
+    excludes:
+      # ★ 服务作用域排除：只排 lab-provider 的内部端点；lab-audit 的同名端点保留
+      - services: lab-provider
+        patterns: /internal/**
+        methods: POST
+    filter-rules:
+      # ★ 定向过滤器：只给 lab-provider 的 /orders/* 端点追加响应头
+      #   （/orders/{id}/lines 是两个段，不匹配 /orders/*，用于验证作用域）
+      - services: lab-provider
+        patterns: /orders/*
+        filters:
+          - AddResponseHeader=X-Lab-Rule,applied
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+      access: unrestricted
+
+logging:
+  level:
+    com.myxhs.demo: DEBUG
+    io.github.loveeleve.polygateway: DEBUG

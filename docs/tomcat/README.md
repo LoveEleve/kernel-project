@@ -30,7 +30,7 @@
 | 09 | 调参与故障排查（acceptCount / maxConnections / CLOSE_WAIT / 线程池满） | B | `09-tuning-troubleshooting.md` | ✅ 完成 |
 | 10 | 替换与定制 Tomcat（Customizer / Valve / 换容器 SPI） | B | `10-customization-and-replacement.md` | ✅ 完成 |
 | 11 | 虚拟线程与 Tomcat（JDK21 / Boot 3.2+） | S | `11-virtual-threads.md` | ✅ 完成 |
-| 12 | 线上排查实战（CPU 100% / 内存泄漏 / 请求 hang） | A | `12-production-troubleshooting.md` | ✅ 完成 |
+| 12 | 线上排查实战（CPU 飙高 / 内存泄漏 / 请求 hang） | A | `12-production-troubleshooting.md` | ✅ 完成 |
 | 13 | K8s / 云原生下的 Tomcat | A | `13-kubernetes-tomcat.md` | ✅ 完成 |
 | 14 | Boot 2→3 / jakarta 迁移 | B | `14-jakarta-migration.md` | ✅ 完成 |
 

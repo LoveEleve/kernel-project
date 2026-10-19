@@ -1,0 +1,10 @@
+server:
+  port: 28003
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        # A-13: 实例2 暴露 API v2.0.0（覆盖主配置的 v1.0.0）
+        metadata:
+          API_VERSION: "2.0.0"

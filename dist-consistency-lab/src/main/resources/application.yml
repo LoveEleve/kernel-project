@@ -1,0 +1,29 @@
+server:
+  port: 28050
+
+spring:
+  application:
+    name: dist-consistency-lab
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+  datasource:
+    url: jdbc:h2:mem:consistency;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+
+logging:
+  level:
+    com.scalab.consistency: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.dubbo</groupId>
+        <artifactId>dubbo-lab</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>lab-provider</artifactId>
+    <name>lab-provider</name>
+    <description>提供者：所有 provider 侧 demo（每篇新增一个 demo 类，入口保持单一）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.myxhs.dubbo</groupId>
+            <artifactId>lab-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo-registry-nacos</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <lab.registry>N/A</lab.registry>
+        <lab.timeout.provider>0</lab.timeout.provider>
+        <lab.spi.inspect>false</lab.spi.inspect>
+        <lab.port>20880</lab.port>
+        <lab.provider.tag></lab.provider.tag>
+        <lab.provider.url.tag></lab.provider.url.tag>
+        <lab.shutdown.wait>10000</lab.shutdown.wait>
+        <lab.qos>false</lab.qos>
+        <lab.threads>0</lab.threads>
+        <lab.queues>-1</lab.queues>
+        <lab.executes>0</lab.executes>
+        <lab.group></lab.group>
+        <lab.slow.extra>0</lab.slow.extra>
+        <lab.slow.echo.tag>false</lab.slow.echo.tag>
+        <lab.protocols>dubbo</lab.protocols>
+        <lab.tri.port>50051</lab.tri.port>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>-Dlab.registry=${lab.registry}</argument>
+                        <argument>-Dlab.timeout.provider=${lab.timeout.provider}</argument>
+                        <argument>-Dlab.spi.inspect=${lab.spi.inspect}</argument>
+                        <argument>-Dlab.port=${lab.port}</argument>
+                        <argument>-Dlab.provider.tag=${lab.provider.tag}</argument>
+                        <argument>-Dlab.provider.url.tag=${lab.provider.url.tag}</argument>
+                        <argument>-Ddubbo.service.shutdown.wait=${lab.shutdown.wait}</argument>
+                        <argument>-Dlab.qos=${lab.qos}</argument>
+                        <argument>-Dlab.threads=${lab.threads}</argument>
+                        <argument>-Dlab.queues=${lab.queues}</argument>
+                        <argument>-Dlab.executes=${lab.executes}</argument>
+                        <argument>-Dlab.group=${lab.group}</argument>
+                        <argument>-Dlab.slow.extra=${lab.slow.extra}</argument>
+                        <argument>-Dlab.slow.echo.tag=${lab.slow.echo.tag}</argument>
+                        <argument>-Dlab.protocols=${lab.protocols}</argument>
+                        <argument>-Dlab.tri.port=${lab.tri.port}</argument>
+                        <argument>com.myxhs.dubbo.lab.provider.ProviderApp</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

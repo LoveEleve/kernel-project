@@ -12,3 +12,9 @@ logs/
 # Mirror of https://github.com/LoveEleve/poly-project (standalone published repo,
 # kept here as a nested clone so the whole workspace opens in one IDE)
 poly/
+
+# vpc-lab 开源对照仓（shallow clone，~60MB，可再生；索引见 vpc-lab/OSS-REFS.md）
+vpc-lab/refs/
+
+# 训练营收集资料（~166M 第三方内容，不入库；仅保留在工作区）
+docs/tmp-question/

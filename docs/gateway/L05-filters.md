@@ -426,7 +426,7 @@ public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
 | 需要**引用 bean**（自定义过滤器实例、动态 KeyResolver） | DSL 更直接 |
 | 需要 **or/not 谓词** | yml 只能 AND |
 | **测试 / 小型项目**（不想维护 yml） | 代码即配置 |
-| **框架 / 平台层**（对外提供路由能力） | 如 microsphere-gateway（L43） |
+| **框架 / 平台层**（对外提供路由能力） | 如 L43 的 polygateway（端点级路由） |
 
 ### 5.6.4 判断标准（修正版）
 

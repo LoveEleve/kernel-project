@@ -27,6 +27,12 @@
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
 
+        <!-- ★ L44：配置中心（动态路由：Nacos 配置变更 → 监听器 → RouteDefinitionWriter → RefreshRoutesEvent） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
         <!-- ★ L16 关键：lb:// 必须有 SCLB（spring-cloud-starter-gateway【不含】它！
              缺了会看到 NoLoadBalancerClientFilter → lb:// 直接 503） -->
         <dependency>
@@ -42,6 +48,56 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+        </dependency>
+
+        <!-- ★ L37：熔断（作用域 reactor，底层 Resilience4j；CircuitBreaker 过滤器需要） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+
+        <!-- ★ L38：LocalResponseCache 需要 Caffeine + Spring Cache（官方文档明确要求两个） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- ★ L39：网关做认证（Spring Security WebFlux） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- ★ L45：Sentinel（starter 提供 core/transport/Nacos 数据源/WebFlux 适配器；
+             raw gateway-adapter 提供 route 级 SentinelGatewayFilter + GatewayFlowRule —— 与 xhs-project 生产接线一致） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+            <exclusions>
+                <!-- ★ 2026-10-07 踩坑：starter 自带 spring-cloud-circuitbreaker-sentinel，
+                     它的 ReactiveCircuitBreakerFactory 与 resilience4j 的实现都是
+                     @ConditionalOnMissingBean(ReactiveCircuitBreakerFactory.class) → 先注册者赢
+                     （com.* 自动配置排序早于 org.*）→ SCG 的 CircuitBreaker 过滤器工厂整个消失
+                     （Unable to find GatewayFilterFactory with name CircuitBreaker）。
+                     本项目熔断走 L37 的 resilience4j（SCG 原生），故排除。 -->
+                <exclusion>
+                    <groupId>com.alibaba.cloud</groupId>
+                    <artifactId>spring-cloud-circuitbreaker-sentinel</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-spring-cloud-gateway-adapter</artifactId>
+        </dependency>
+        <!-- ★ L45 实验 D：规则持久化到 Nacos（gw-flow JSON，复刻 xhs 生产） -->
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-datasource-nacos</artifactId>
         </dependency>
     </dependencies>
 

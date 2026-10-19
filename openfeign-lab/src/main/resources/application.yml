@@ -1,0 +1,47 @@
+server:
+  port: 28002
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain
+    min-response-size: 1024
+
+spring:
+  application:
+    name: openfeign-lab
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 21.130.247.89:18848
+        namespace: sca-lab-dev
+        enabled: true
+    loadbalancer:
+      enabled: true
+    openfeign:
+      compression:
+        request:
+          enabled: true
+          mime-types: application/json,text/plain,text/plain;charset=UTF-8
+          min-request-size: 1024
+          content-encoding-types: gzip
+        response:
+          enabled: true
+      okhttp:
+        enabled: false
+
+feign:
+  sentinel:
+    enabled: true
+
+logging:
+  level:
+    com.scalab.openfeign: DEBUG
+    org.springframework.cloud.openfeign: DEBUG
+
+spring.cloud.openfeign.client.config.nacos-lab.connectTimeout: 5000
+spring.cloud.openfeign.client.config.nacos-lab.readTimeout: 5000
+spring.cloud.openfeign.client.config.nacos-lab-direct.connectTimeout: 2000
+spring.cloud.openfeign.client.config.nacos-lab-direct.readTimeout: 2000
+spring.cloud.openfeign.client.config.nacos-lab-v1.connectTimeout: 2000
+spring.cloud.openfeign.client.config.nacos-lab-v1.readTimeout: 3000
+spring.cloud.openfeign.client.config.nacos-lab-v2.connectTimeout: 2000
+spring.cloud.openfeign.client.config.nacos-lab-v2.readTimeout: 5000

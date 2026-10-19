@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.myxhs.dubbo</groupId>
+        <artifactId>dubbo-lab</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>lab-consumer</artifactId>
+    <name>lab-consumer</name>
+    <description>消费者：所有 consumer 侧 demo（直连/注册中心/异步/路由等）</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.myxhs.dubbo</groupId>
+            <artifactId>lab-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.dubbo</groupId>
+            <artifactId>dubbo-registry-nacos</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <lab.registry>N/A</lab.registry>
+        <lab.timeout.ref>3000</lab.timeout.ref>
+        <lab.timeout.method>0</lab.timeout.method>
+        <lab.slow.ms>2000</lab.slow.ms>
+        <lab.direct.url>dubbo://127.0.0.1:20880</lab.direct.url>
+        <lab.loop>1</lab.loop>
+        <lab.interval.ms>0</lab.interval.ms>
+        <lab.lb></lab.lb>
+        <lab.async>false</lab.async>
+        <lab.retries>0</lab.retries>
+        <lab.name>timeout-lab</lab.name>
+        <lab.tag></lab.tag>
+        <lab.debug>false</lab.debug>
+        <lab.trace.id></lab.trace.id>
+        <lab.cache></lab.cache>
+        <lab.fixed.name>false</lab.fixed.name>
+        <lab.concurrent>0</lab.concurrent>
+        <lab.generic>false</lab.generic>
+        <lab.check>true</lab.check>
+        <lab.router.rule></lab.router.rule>
+        <lab.group></lab.group>
+        <lab.actives>0</lab.actives>
+        <lab.submit.interval.ms>0</lab.submit.interval.ms>
+        <lab.qos>false</lab.qos>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>-Dlab.registry=${lab.registry}</argument>
+                        <argument>-Dlab.timeout.ref=${lab.timeout.ref}</argument>
+                        <argument>-Dlab.timeout.method=${lab.timeout.method}</argument>
+                        <argument>-Dlab.slow.ms=${lab.slow.ms}</argument>
+                        <argument>-Dlab.direct.url=${lab.direct.url}</argument>
+                        <argument>-Dlab.loop=${lab.loop}</argument>
+                        <argument>-Dlab.interval.ms=${lab.interval.ms}</argument>
+                        <argument>-Dlab.lb=${lab.lb}</argument>
+                        <argument>-Dlab.async=${lab.async}</argument>
+                        <argument>-Dlab.retries=${lab.retries}</argument>
+                        <argument>-Dlab.name=${lab.name}</argument>
+                        <argument>-Dlab.tag=${lab.tag}</argument>
+                        <argument>-Dlab.debug=${lab.debug}</argument>
+                        <argument>-Dlab.trace.id=${lab.trace.id}</argument>
+                        <argument>-Dlab.cache=${lab.cache}</argument>
+                        <argument>-Dlab.fixed.name=${lab.fixed.name}</argument>
+                        <argument>-Dlab.concurrent=${lab.concurrent}</argument>
+                        <argument>-Dlab.generic=${lab.generic}</argument>
+                        <argument>-Dlab.check=${lab.check}</argument>
+                        <argument>-Dlab.router.rule=${lab.router.rule}</argument>
+                        <argument>-Dlab.group=${lab.group}</argument>
+                        <argument>-Dlab.actives=${lab.actives}</argument>
+                        <argument>-Dlab.submit.interval.ms=${lab.submit.interval.ms}</argument>
+                        <argument>-Dlab.qos=${lab.qos}</argument>
+                        <argument>com.myxhs.dubbo.lab.consumer.ConsumerApp</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

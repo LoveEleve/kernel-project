@@ -1,0 +1,20 @@
+server:
+  port: 28060
+
+spring:
+  application:
+    name: es-lab
+
+# 本地单节点 ES（es-lab 自带，端口 19200 对齐 xhs-project 口径）
+elasticsearch:
+  uris: http://127.0.0.1:19200
+
+logging:
+  level:
+    com.scalab.es: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

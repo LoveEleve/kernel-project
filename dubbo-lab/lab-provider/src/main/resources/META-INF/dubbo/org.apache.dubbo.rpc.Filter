@@ -1,0 +1,1 @@
+trace=com.myxhs.dubbo.lab.provider.filter.TraceFilter

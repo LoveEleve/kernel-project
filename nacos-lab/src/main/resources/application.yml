@@ -1,0 +1,34 @@
+server:
+  port: 28001
+
+spring:
+  application:
+    name: nacos-lab
+  config:
+    import:
+      - optional:nacos:nacos-lab.yaml
+      - optional:nacos:shared-datasource.yaml?group=DATASOURCE_GROUP
+      - optional:nacos:shared-redis.yaml?group=REDIS_GROUP
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 21.130.247.89:18848
+        namespace: sca-lab-dev
+        ephemeral: true
+        # A-13: 实例1 暴露 API v1.0.0
+        metadata:
+          API_VERSION: "1.0.0"
+      config:
+        server-addr: 21.130.247.89:18848
+        namespace: sca-lab-dev
+        file-extension: yaml
+        refresh-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,nacosdiscovery
+  endpoint:
+    health:
+      show-details: always

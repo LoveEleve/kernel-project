@@ -1,0 +1,25 @@
+server:
+  port: 28040
+
+spring:
+  application:
+    name: rocketmq-lab
+
+logging:
+  level:
+    com.scalab.rocketmq: DEBUG
+    org.apache.rocketmq: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+rocketmq:
+  name-server: 21.130.247.89:9876
+  producer:
+    group: rocketmq-lab-producer
+    send-message-timeout: 5000
+    retry-times-when-send-failed: 2
+    retry-times-when-send-async-failed: 2

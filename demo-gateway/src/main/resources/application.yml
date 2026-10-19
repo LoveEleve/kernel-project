@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: demo-gateway
+  # ★ L39：认证实验用的内存用户（生产不会用 Basic，这里只为看“网关拦截/放行”）
+  security:
+    user:
+      name: demouser
+      password: demopass
   # ★ L19 Demo B：Redis 定义库（本机 native redis；docker 的 16379 端口转发当前坏了）
   data:
     redis:
@@ -15,8 +20,33 @@ spring:
         server-addr: localhost:8848      # 本机 Nacos（docs/gateway/infra-nacos.md）
         # ★ 网关【不注册自己】：它是边缘组件（调用方走 DNS/SLB 找到它），不需要被发现。
         #   注册自己会让【网关启动依赖 Nacos 可用性】—— 实测踩过：Nacos gRPC 抖动 → 网关启动失败
-        #   （Client not connected, current status:UNHEALTHY）
+        #   （Client not connected, current status:UNHEALTHY）【2026-10-07 修正：原来误缩进在 config 下】
         register-enabled: false
+      config:                            # ★ L44：配置中心（动态路由用；NacosConfigManager 读取）
+        server-addr: localhost:8848
+        import-check:
+          enabled: false                 # 本实验不用 spring.config.import（路由 JSON 是数组，不适合作为属性源）
+    # ★ L45：Sentinel（eager=true 启动即初始化，默认懒加载要等第一个请求）
+    sentinel:
+      eager: true
+      # ★ L45 实验 D：规则持久化到 Nacos（gw-flow JSON；复刻 xhs 生产 my-xhs-gateway-sentinel-flow.json）
+      #   规则 JSON：dataId=demo-gateway-sentinel-flow.json（DEFAULT_GROUP）
+      datasource:
+        flow:
+          nacos:
+            server-addr: localhost:8848
+            group-id: DEFAULT_GROUP
+            data-id: demo-gateway-sentinel-flow.json
+            data-type: json
+            rule-type: gw-flow
+        # ★ L45 实验 E：熔断规则（Sentinel DegradeRule，标准类型 converter 自动注册）
+        degrade:
+          nacos:
+            server-addr: localhost:8848
+            group-id: DEFAULT_GROUP
+            data-id: demo-gateway-sentinel-degrade.json
+            data-type: json
+            rule-type: degrade
     gateway:
       # ★ L19 Demo A：注册中心来源（服务级自动路由；需 Nacos）
       discovery:
@@ -28,6 +58,20 @@ spring:
       httpclient: # global timeout config
         connect-timeout: 2000
         response-timeout: 10s
+      # ===== L38 本地响应缓存开关 =====
+      # local-response-cache 过滤器默认【关闭】，必须显式 enabled=true 才会注册
+      # ===== L39 安全响应头（SecureHeaders 过滤器用这些值；也可在路由 args 里覆盖）=====
+      filter:
+        local-response-cache:
+          enabled: true
+        secure-headers:
+          frame-options: SAMEORIGIN      # 覆盖默认 DENY（演示可配置）
+          disable: x-xss-protection      # 禁用某个头（小写头名；这里演示 disable 用法）
+      # 开启缓存开关后，默认还会附带一个"全局缓存过滤器"（缓存所有路由的响应）；
+      # 这里关掉，避免影响其他实验路由（只让显式挂了 LocalResponseCache 的路由被缓存）
+      global-filter:
+        local-response-cache:
+          enabled: false
       # ===== L07 CORS 实验（学完可注释掉）=====
       # 全局 CORS + 预检解药：预检请求匹配不上路由时也能拿到 CORS 头
       # 想复现"预检 403"：把 add-to-simple-url-handler-mapping 注释掉，再打 /cors-lab2/** 的 OPTIONS
@@ -73,6 +117,112 @@ spring:
           uri: http://localhost:8081
           predicates:
             - Path=/hello/**
+        # ===== L36 限流实验：RequestRateLimiter + RedisRateLimiter（Redis+Lua 令牌桶）=====
+        # 打法：连打 /rl-lab/echo/hi（同一 path 同一桶，rate=2/s burst=2，第 3 发即 429）
+        # 原理见 docs/gateway/L36-rate-limiting.md；KeyResolver 见 filter/RateLimitConfig
+        - id: rate-limit-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/rl-lab/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 2
+                key-resolver: "#{@pathKeyResolver}"
+        # ===== L45 Sentinel 限流实验：route 级 QPS=2 =====
+        # 打法：连打 /sentinel-lab/echo/hi，第 3 发即被 Sentinel 拦（429 统一 JSON）
+        # 规则加载见 sentinel/SentinelGatewayConfig（本地程序化；实验 D 换成 Nacos 数据源）
+        - id: sentinel-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/sentinel-lab/**
+          filters:
+            - StripPrefix=1
+        # ===== L37 熔断 & 重试实验 =====
+        # A) 带 fallback 的熔断：statusCodes 把 500 也算失败（不配的话 5xx 不算失败！）
+        #    打法：/cb-lab/status/500 连打 4 发 → 熔断打开 → /cb-lab/hello 直接走 fallback（不碰 provider）
+        - id: cb-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/cb-lab/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: cb-lab
+                fallbackUri: forward:/fallback
+                statusCodes:
+                  - 500
+        # B) 不带 fallback：看超时/短路时网关直接回什么码（默认 TimeLimiter=1s；本 lab 已把本路由调成 3s，见下方 timelimiter 段；熔断打开后 → 503）
+        - id: cb-nofallback
+          uri: http://localhost:8081
+          predicates:
+            - Path=/cb-nofallback/**
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: cb-nofallback
+        # C) 重试：默认只重试 GET + 5xx 系列（POST 不重试——幂等保护）；配合 /flaky 看"第 N 次成功"
+        - id: retry-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/retry-lab/**
+          filters:
+            - StripPrefix=1
+            - name: Retry
+              args:
+                retries: 3
+                series: SERVER_ERROR
+                methods: GET
+        # D) 重试 × 超时：路由级 response-timeout=500ms + Retry（默认异常含网关 TimeoutException）
+        #    一次请求最多尝试 4 次 → 最坏耗时 ~2s 才回 504（超时被重试放大）
+        - id: retry-timeout-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/retry-timeout-lab/**
+          filters:
+            - StripPrefix=1
+            - name: Retry
+              args:
+                retries: 3
+                methods: GET
+          metadata:
+            response-timeout: 500
+        # ===== L38 响应缓存 & body 改写 =====
+        # A) 响应缓存（TTL=10s，便于观察过期）
+        - id: cache-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/cache-lab/**
+          filters:
+            - StripPrefix=1
+            - name: LocalResponseCache
+              args:
+                timeToLive: 10s
+        # B) 响应缓存 + 大小上限（200B：body 超过就不缓存）
+        - id: cache-small-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/cache-small-lab/**
+          filters:
+            - StripPrefix=1
+            - name: LocalResponseCache
+              args:
+                timeToLive: 10s
+                size: 200B
+        # C) body 改写（rewrite-lab）只能用 Java DSL 配 —— 见 RewriteRouteConfig.java
+        # ===== L39 安全：认证 + 安全响应头 =====
+        # /secure-lab/** 需要 Spring Security 认证（Basic，Demo 用）；其余路由不受影响
+        - id: secure-lab
+          uri: http://localhost:8081
+          predicates:
+            - Path=/secure-lab/**
+          filters:
+            - StripPrefix=1
+            - SecureHeaders
         # ===== L07 CORS 实验路由（学完可注释掉）=====
         # 实验 1：只有 Path 谓词 → 单独用 metadata.cors 时预检也能过
         - id: cors-lab
@@ -124,12 +274,42 @@ spring:
 demo:
   lb:
     mode: gray
+  # ★ L45：false = 复现 Sentinel 1.8.8 默认 BlockHandler 的 Spring 6 兼容问题（T-106，请求悬挂）；
+  #         true  = 自定义统一 429 JSON（生产姿势）
+  sentinel:
+    custom-block-handler: true
+
+# ★ L37：熔断器实例参数（Resilience4j 原生配置；实例名 = CircuitBreaker 过滤器的 name）
+#   默认是"滑动窗口 100 次、失败率 50%、打开后等 60s"，实验里改小才看得到三态转换
+resilience4j:
+  circuitbreaker:
+    instances:
+      cb-lab:
+        sliding-window-size: 4
+        minimum-number-of-calls: 4
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 1
+        automatic-transition-from-open-to-half-open-enabled: true
+      cb-nofallback:
+        sliding-window-size: 4
+        minimum-number-of-calls: 4
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 1
+        automatic-transition-from-open-to-half-open-enabled: true
+  # 默认 TimeLimiter 超时只有 1s（请求慢于 1s 直接 504，见 L37 实验 A）；
+  # 这里把 cb-nofallback 单独调成 3s；想验证"默认 1s"，注释掉这段再打 /cb-nofallback/slow?ms=2000
+  timelimiter:
+    instances:
+      cb-nofallback:
+        timeout-duration: 3s
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway,beans,metrics   # ← L18 观测实验：看 /actuator/metrics/http.server.requests
+        include: health,info,gateway,beans,metrics,circuitbreakers,circuitbreakerevents,sentinel   # ← L37 熔断观测 + L45 Sentinel 规则端点
   endpoint:
     gateway:
       enabled: true

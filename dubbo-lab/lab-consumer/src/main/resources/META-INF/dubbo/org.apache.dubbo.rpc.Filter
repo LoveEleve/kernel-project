@@ -1,0 +1,1 @@
+clientTrace=com.myxhs.dubbo.lab.consumer.filter.ClientTraceFilter

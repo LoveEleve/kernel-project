@@ -245,7 +245,7 @@ metadata  = 整个实例 metadata 复制过来
 - 加 `WebEndpointMappingGlobalFilter`：读实例 metadata 里的**端点清单**，做**端点级**匹配/排除
 
 与官方"注册中心来源"的对比：官方 = **服务级**（`Path=/serviceId/**` 路径透传）；microsphere = **端点级**（网关知道下游有哪些端点）。
-详见 L43 素材：`L43-microsphere-gateway-extension.md`。
+详见 L43：`L43-polygateway-extension.md`。
 
 ### 实测（2026-09-30）：两个来源各跑一遍
 

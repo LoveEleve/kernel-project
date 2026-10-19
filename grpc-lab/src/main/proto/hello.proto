@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package myxhs.lab;
+
+option java_package = "com.myxhs.grpc.lab.proto";
+option java_multiple_files = true;
+
+// 实验用最小服务：先 unary，流式模式在后续实验逐步加入
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+
+// 第二个服务：验证"一个 Server 承载多个 ServiceDefinition"
+service Echo {
+  rpc Echo (HelloRequest) returns (HelloReply);
+}
+
+// 第 05 篇：四种流式模式（unary 见 Greeter）
+service Streamer {
+  rpc ServerStream (HelloRequest) returns (stream HelloReply);       // 1 请求 → N 响应
+  rpc ClientStream (stream HelloRequest) returns (HelloReply);       // N 请求 → 1 响应
+  rpc BidiStream (stream HelloRequest) returns (stream HelloReply);  // N 请求 ↔ N 响应
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}

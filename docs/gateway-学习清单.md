@@ -71,11 +71,14 @@
 | `docs/gateway/L28-request-body-once.md` | **Lesson 28** body 只能读一次（缓存全链 / 谓词支线） | ✅ 已写 |
 | `docs/gateway/L29-sticky-session.md` | **Lesson 29** 粘性会话（写/读两个半边 / 默认关） | ✅ 已写 |
 | `docs/gateway/L30-dynamic-route-refresh.md` | **Lesson 30** 动态刷新（触发源 5 种 / scoped / 在途不中断；含两组实测） | ✅ 已写 |
+| `docs/gateway/L36-rate-limiting.md` | **Lesson 36** 限流（Redis+Lua 令牌桶 / `KeyResolver` / 架构问答；含两组实测） | ✅ 已写（**Stage 7 开篇**） |
 | `docs/gateway/L16-custom-loadbalancer.md` | **Lesson 16** 自定义负载均衡（`lb://` 链路 / SCLB 依赖坑 / 染色 vs 选实例 / **生产做法含 microsphere 实战 + Gateway 两坑**，含三模式实测 + 演示脚本） | ✅ 已写（582 行） |
 | `docs/gateway/infra-nacos.md` | **基础设施笔记** 本地 Nacos 部署（2.2.3 standalone + 4 个坑 + 复用命令） | ✅ 已部署运行 |
 | `docs/gateway/architecture-map.md` | **★ Stage 5 产出物** 架构全景（四组组件 / 请求流转 / 三张面试图 / 速记卡） | 📌 随 L17~L30 校验 |
 | `docs/gateway/production-gateway-capabilities.md` | **L40/L45 素材** 生产级网关能力全景（大厂对比 + 8 类能力 + 性能 + Sentinel 选型） | ✅ 已写 |
-| `docs/gateway/L43-microsphere-gateway-extension.md` | **L43 素材** microsphere-gateway 端点级路由扩展（含简历价值判断） | ✅ 已写 |
+| `docs/gateway/L43-polygateway-extension.md` | **L43 正文** polygateway 端点级路由扩展（采集/发布 + 路由生成/刷新源码 + 32 测试 + 真实 Nacos 实测） | ✅ 已写 |
+| `docs/gateway/xhs-gateway-zone.md` | **L42/L46 配套解读** 网关侧 Zone 多活适配（xhs-gateway zone 包 4 文件 + 取值链 bug） | ✅ 已写 |
+| `docs/gateway/L44-nacos.md` | **L44 正文** Gateway × Nacos（自动路由 / 配置中心动态路由 / 宕机降级；含三组真实环境实测） | ✅ 已写 |
 | `docs/gateway/concept-index.md` | 概念索引（标注 前向/后向/外部） | 持续维护 |
 
 ---
@@ -279,7 +282,7 @@
       ③ **metadata 是什么**：**路由级自由 kv**（不属于任何过滤器）—— `args` 喂组件、`metadata` 是路由扩展位
       ④ **框架原生只读 3 个 key**：`response-timeout` / `connect-timeout` / `cors`；**其它 key 必须自己写过滤器读，否则死配置**
       【已移出】"死配置 4 种"审计框架 → **L41**（L06 只留指针）
-      【别混淆】路由 metadata（Route 对象上）≠ 实例 metadata（注册中心实例上；L42 zone / L43 we:// 读的是后者）
+      【别混淆】路由 metadata（Route 对象上）≠ 实例 metadata（注册中心实例上；L42 zone / L43 端点级路由读的是后者）
       【精确补充】配置 = **2 个位置 / 3 种**：① 全局配置值 ② 全局默认过滤器（`default-filters`，**叠加**语义，不是覆盖）③ 路由级；判断口诀见 6.6
 - [x] **L07 CORS**（★v5 加强：覆盖"处理位置 / 两种配置 / 预检 / 演示"）
       📄 **正文**：`docs/gateway/L07-cors.md`（含 A/B/C/D 共 6 组实测数据）
@@ -573,29 +576,34 @@
 > 为什么单独一个 Stage：v3 把这些能力错误排除了（只看 xhs 用了什么）。**架构面试必问，不能缺。**
 > （★v5.4：Stage 5 扩为 13 课后，本 Stage 课号已顺移为 L36~L40）
 
-- [ ] **L36 Rate Limiting** —— `RequestRateLimiter` / `RedisRateLimiter`
+- [x] **L36 Rate Limiting** —— `RequestRateLimiter` / `RedisRateLimiter`
+      📄 **正文**：`docs/gateway/L36-rate-limiting.md`（`/rl-lab` 主线实测 + Redis+Lua 令牌桶全解 + `KeyResolver` 粒度/组合 + 生产六件事 + 面试八问 + fail-open）｜**概念深挖独立专题**：`docs/gateway/rate-limiting-concepts.md`
       【是什么】Gateway 内置的限流过滤器，基于 Redis + Lua 的令牌桶
       🔴 **要掌握的 2 条**：
       ① **令牌桶 + Lua 的原子性**（为什么不用 Java 实现：多实例下要共享计数）
       ② **`KeyResolver` 决定限流粒度**（按用户 / 按 IP / 按接口）
       【架构问题】限流放网关 vs 放服务？Gateway 内置限流 vs Sentinel 的区别与取舍？
-- [ ] **L37 Circuit Breaker & Retry** —— `CircuitBreaker`（Resilience4j）/ `Retry`
+- [x] **L37 Circuit Breaker & Retry** —— `CircuitBreaker`（Resilience4j）/ `Retry`
+      📄 **正文**：`docs/gateway/L37-circuit-breaker-retry.md`（4 条 lab 路由 + 5 组实测：默认 1s TimeLimiter / 三态全流程 / GET-POST 重试不对称 / 重试×超时放大 / statusCodes 坑；源码四段 + 治理四件套 + 面试问答）｜**概念深挖独立专题**：`docs/gateway/circuit-breaker-concepts.md`（含 R4j 最小上手附录）
       🔴 **要掌握的 3 条**：
       ① 断路器三态（closed / open / half-open）与状态转移
       ② **重试必须幂等**（非幂等接口重试 = 重复下单）
-      ③ **治理四件套怎么配合**：超时 → 重试 → 熔断 → 限流（顺序与参数怎么定）
+      ③ **治理四件套怎么配合**：限流 → 重试 → 熔断 → 超时（从外到内的顺序与参数怎么定）
          【v5 补】**超时值怎么定**（从 L06 移入）：全局给安全值（5s）、慢接口单独调大、长连接特别大；**铁律：网关超时 < 上游客户端超时**
       【架构问题】熔断放网关还是放服务？（网关熔断保护的是"下游"还是"网关自己"）
-- [ ] **L38 Response Cache & Body Rewrite** —— `LocalResponseCache` / `ModifyRequestBody` / `ModifyResponseBody`
+- [x] **L38 Response Cache & Body Rewrite** —— `LocalResponseCache` / `ModifyRequestBody` / `ModifyResponseBody`
+      📄 **正文**：`docs/gateway/L38-response-cache-body-rewrite.md`（9 组实测：缓存命中/TTL/no-store·private·Vary:*/no-cache 策略/大小上限/Authorization key/body 改写；源码四段 + 本地缓存边界 + 坑表）
       🔴 **要掌握的 1 条**：什么响应能缓存（`Cache-Control` 语义、本地缓存 vs 分布式缓存的一致性）
       【v5 补】深入：`ResponseCacheManager` / 键生成（`KeyGenerator`）/ 大小权重（`ResponseCacheSizeWeigher`）
       【架构问题】网关做缓存 vs CDN vs 服务内缓存，各自适用什么场景？
-- [ ] **L39 Security & Transport** —— Spring Security 集成 / TLS / HTTP2
+- [x] **L39 Security & Transport** —— Spring Security 集成 / TLS / HTTP2
+      📄 **正文**：`docs/gateway/L39-security-transport.md`（三组实测：SecureHeaders 两套安全头来源 / 认证 401→200 / TLS 终止+ALPN h2+h2c+X-Forwarded-Proto；源码 + 两种认证模式 + 终止点对比 + 坑表）
       🔴 **要掌握的 2 条**：
       ① 网关做认证的两种模式（**token 校验** vs **OAuth2 客户端**）
       ② **HTTPS 在哪里终止**（Nginx / 网关 / 服务）与证书管理
       【v5 补】**安全头**：`SecureHeadersGatewayFilterFactory`（X-Frame-Options / HSTS / X-Content-Type-Options 等）
-- [ ] **L40 Gateway 选型与边界**（★ 架构面试核心）
+- [x] **L40 Gateway 选型与边界**（★ 架构面试核心）
+      📄 **正文**：`docs/gateway/L40-gateway-selection-boundaries.md`（反例六连 / 五候选选型对比+决策清单 / 边界速查表+XSS 三理由 / 职责划分总表 / 两段 30 秒话术）｜素材：`production-gateway-capabilities.md`
       🔴 **要掌握的 3 条**：
       ① **选型**：Spring Cloud Gateway vs Nginx vs APISIX/Kong —— 各自擅长什么、怎么选
       ② **边界**：什么**不该**放网关（业务逻辑、大文件传输、长事务、**XSS 过滤**）
@@ -606,7 +614,7 @@
          → 要能答"**为什么不在网关做**"，比"怎么写 `XssFilter`"更有价值
       ③ **职责划分**：认证 / 限流 / 灰度 / 日志 —— 哪些必须放网关、哪些可以下放
 
-### Stage 8 · 架构视角：xhs 网关审计 + microsphere 扩展（★v4 新增）
+### Stage 8 · 架构视角：xhs 网关审计 + 网关扩展实践（★v4 新增）
 
 - [ ] **L41 xhs 网关生产就绪度审计**（★ 面试"你的项目哪里没做好"的标准答案）
       【产出】**不足 / 遗漏 / 错误** 三类清单，每条含「现状 → 风险 → 怎么改」
@@ -635,26 +643,27 @@
       ① **网关是无状态的吗**？什么会让它变成有状态（本地缓存 / 会话 / 限流计数）
       ② **多实例下**：token 校验、限流、灰度怎么保证一致
       ③ **容量怎么估**：瓶颈在哪（连接池 / 线程 / GC）、怎么压测、怎么扩容
-      【v5 补·zone 多活现状（已核实）】xhs **自研了 42 个 zone 文件**（未引 microsphere 依赖）：
+      【v5 补·zone 多活现状（已核实）】xhs **自研了 43 个 zone 文件**（含测试；未引 microsphere 依赖）：
       `ZoneLocator` SPI + `CompositeZoneLocator` + `EnvVarZoneLocator`/`FileZoneLocator`/`IpRangeZoneLocator`（env/文件/CIDR 三种自动发现）
       + `ZonePreferenceFilter`（10 步过滤）+ LoadBalancer 集成 + `DynamicDataSource` + Redis 拦截器链
       + `propagation`（X-Zone 跨服务传播）+ `admin/ZoneAdminController`（运行时热切）
       【仍缺】`ZoneContextChangedEvent` / `ZoneContextChangedListener`（配置中心驱动的自动切换）/ `ZoneAttachmentHandler`（区域信息注册 Nacos）
       【简历口径】✅ 可写"自研 ZoneLocator 自动发现"；❌ 不能写"用了 microsphere"（没引依赖）；✅ 可写"参考 microsphere 设计自研"
-- [ ] **L43 microsphere-gateway：SCG 扩展实践**
-      📄 **素材已就绪**：`docs/gateway/L43-microsphere-gateway-extension.md`（含数据流图 / 28 文件结构 / 缺口表 / 简历判断）
+      📄 **网关侧适配解读**：`docs/gateway/xhs-gateway-zone.md`（4 文件最小适配 + 取值链 bug 修复；L46 会用）
+- [x] **L43 polygateway：SCG 端点级路由扩展实践**
+      📄 **正文**：`docs/gateway/L43-polygateway-extension.md`（provider 采集/发布 + gateway 路由生成/心跳刷新/服务作用域排除源码 + 32 测试 + polygateway-lab 真实 Nacos 实测·发现并修复 2 个集成问题）
       🔴 **要掌握的 3 条**：
-      ① **`we://` 端点级路由** vs 官方两条路线（手写 `lb://` / `discovery.locator` 自动路由，两者都只到"服务级"）
-         —— microsphere 从实例 metadata 读端点集，做到**零配置 + 端点级控制**
-      ② **不改 SCG 源码的扩展姿势**：`BeanDefinitionRegistryPostProcessor` 替换 `FilteringWebHandler` / 自定义 `GlobalFilter` / WebFlux+MVC **双栈适配**
-      ③ ⚠️ **它的已知硬伤 G1**：滚动发布时端点缓存不更新 → 新接口**静默返回 200** —— 这是自研/集成的机会点
-      【简历判断】microsphere 是**小马哥的项目，不能直接写**；能写的是"**集成**"或"**参考设计自研**"（详见素材 §7）
+      ① **端点级路由** vs 官方两条路线（手写 `lb://` / `discovery.locator`，两者都只到"服务级"）—— 服务发布端点 metadata（六维），网关零配置精确匹配
+      ② **生成期扩展姿势**：`RouteDefinitionLocator` 翻译成官方路由（官方谓词 + `lb://` + `StripPrefix=1`），运行时零侵入；官方缺 Consumes/Produces 谓词，自研补齐
+      ③ **滚动发布正确性**：全实例并集 + 每次心跳强制 `RefreshRoutesEvent`；Nacos/SCA 2023 须显式 `spring.cloud.nacos.discovery.heart-beat.enabled=true`
+      【归档】旧版第三方扩展对照稿：`docs/gateway/archive/L43-microsphere-gateway-extension.md`
 
 ### Stage 9 · Gateway 生态打通（Integration）（★v5 新增，用户指定"和其他组件打通"）
 > v5 依据：训练营 `GATEWAY-PLAN.md`（GW-1~GW-9，9 域）+ 官方文档缺口扫描
 > 核心：**Gateway 从来不是孤立的** —— 它靠 Nacos 拿实例、靠 SCLB 选实例、靠 Sentinel/Redis 做治理
 
-- [ ] **L44 Gateway × Nacos**（服务发现 + 配置中心）
+- [x] **L44 Gateway × Nacos**（服务发现 + 配置中心）
+      📄 **正文**：`docs/gateway/L44-nacos.md`（实验 A 自动路由：路由生成规则源码 + 503 灰度插曲 / 实验 B 配置中心动态路由：方案 A 坑 + 方案 B 实现 + 装载/热增/热删/恢复 / 实验 C 宕机降级：缓存兜底 + 自动重连）
       🔴 **要掌握的 3 条**：
       ① **`DiscoveryClientRouteDefinitionLocator`**：`spring.cloud.gateway.discovery.locator.enabled=true`
          → **从注册中心自动生成路由**（`/serviceId/**` → `lb://serviceId`，自动 RewritePath）
@@ -662,14 +671,17 @@
       ② Nacos 配置中心 → 路由动态刷新（`RefreshRoutesEvent` 链路）
       ③ Nacos 挂了网关会怎样（本地快照 / 降级）
       【交叉引用】`15-Spring-Cloud-Gateway源码分析规划.md` G-7 + 训练营 GW-4
-- [ ] **L45 Gateway × Sentinel**（★ 回答"功能冲突"）
+- [x] **L45 Gateway × Sentinel**（★ 回答"功能冲突"）
+      📄 **正文**：`docs/gateway/L45-sentinel.md`（5 组实测：A 接入 + route 级限流 + **T-106 默认 Handler 悬挂复现/修复** / B 参数级限流 / C 分层限流 / D Nacos 规则源 + 热更新 / E RT 熔断；含 Sentinel starter ↔ resilience4j 工厂冲突修复）
       🔴 **要掌握的 3 条**：
       ① **功能重叠对照表**：限流/熔断/降级 —— Gateway 自带 vs Sentinel 各自覆盖什么
       ② **选型判断**：已有 Sentinel 体系 → 用 Sentinel（统一规则中心）；只有网关要限流 → 用自带（少依赖）
       ③ **分层限流**：网关限流（入口层，防全局过载）vs 服务限流（精细层，保护单服务资源）
       【落地】`sentinel-spring-cloud-gateway-adapter` 的 `SentinelGatewayFilter` + `GatewayFlowRule`
       【v5 补】**自定义 `BlockRequestHandler`**：被限流时返回什么（默认 429 纯文本；生产要统一错误体 `{code,msg}` + 正确 Content-Type）
-- [ ] **L46 Gateway × SCLB**（负载均衡深入）
+      【实测修正】1.8.8 默认 Handler 在 WebFlux 6.1.6 上**直接不可用**（`NoSuchMethodError: ServerResponse.status(HttpStatus)` → 请求悬挂）——必须自定义；且网关是"双适配器双回调"（实际生效的是 WebFlux 回调）
+- [x] **L46 Gateway × SCLB**（负载均衡深入）
+      📄 **正文**：`docs/gateway/L46-sclb.md`（实测：默认 RoundRobin 严格交替 / **Nacos 摘除 1.4s vs 网关 35s 缓存窗口**（死实例 500 Connection refused 复现）/ 策略全景（7 种预设 + 权重三步 + 指标驱动动态权重 + 一致性哈希自研，深挖指向 loadbalancer-lab）/ 摘除三来源）
       🔴 **要掌握的 3 条**：
       ① `lb://` 背后的 `ReactiveLoadBalancerClientFilter` 如何消费 SCLB 抽象
       ② 负载均衡策略（轮询/随机/权重/同 zone 优先/一致性哈希）怎么选
@@ -765,3 +777,4 @@
 | **v5.4** | **用户指出"源码覆盖太薄、不是为对象而对象"** —— 对照其 47 项源码大纲逐项核对，发现**工厂机制（`GatewayFilterFactory`/`RoutePredicateFactory` 执行过程）/ 谓词家族 / 来源链 / 两级缓存 / 链执行 / sticky session** 均无课；"架构地图"不能替代源码本体 | **Stage 5 从 7 课 → 13 课**（L17~L30；口径仍为"讲机制不逐行"）；Stage 6~10 编号顺移 +6（L31~L50，总 46 课）；同步更新全链路图与覆盖审计表 |
 | **v5.3** | **用户质疑"Stage 5 核心源码是否都规划了"** —— 逐类审计后发现真缺口：**路由来源链**（`RouteDefinitionLocator` 家族 5 类）与**过滤执行骨架**（`GatewayFilterAdapter` / `DefaultGatewayFilterChain` / `OrderedGatewayFilter`）**无课覆盖** | ① 新增 **Stage 5 核心类覆盖审计表**（防止再漏）；② **L17 扩**为"四组组件"；③ **L21 扩**补"来源链"（解释 L08 的 404）；④ **L25 扩**补"执行骨架"；⑤ 新增产出物 **`docs/gateway/architecture-map.md`**（整体架构/请求流转/对象清单/速记卡） |
 | **v5.2** | **L06 两次返工**：① 初版主题不清（"超时+metadata"两点罗列）→ 改"配置体系"又太抽象 → 用户指出"感觉没学到东西" | **定为"两个具体东西"**：超时（4 个 + 单位坑 + 值怎么定）+ 路由 metadata（框架只读 3 key）；**"死配置 4 种"审计框架移到 L41**；补"2 个位置 / 3 种配置"模型 + 连接池（分池 / 三种连接辨析 / `max-connections` per-pool 推论） |
+| **v6** | **L43 定位调整（用户指定）**：课程不再讲授第三方扩展案例，聚焦自有项目 | L43 正文重写为"polygateway：SCG 端点级路由扩展实践"（纯自有实现 + 真实 Nacos 实测）；旧稿归档至 `docs/gateway/archive/`；Stage 8 标题同步 |
