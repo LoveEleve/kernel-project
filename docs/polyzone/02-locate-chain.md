@@ -2,7 +2,7 @@
 title: "02-原理一：区域定位链"
 series: "PolyZone 异地多活路由系列"
 previous: "01-what-is-polyzone.md"
-next: "03-preference-algorithm.md（待写）"
+next: "03-preference-algorithm.md"
 source_refs:
   - "已核：CompositeZoneLocator（:44/AnnotationAwareOrderComparator.sort:55/首成功循环:85/缓存首返:71-72/fastFail:81-109/setProperty:119）/ 四定位器 DEFAULT_ORDER：ECS 文件:51=5、ECS Task V4:50=10、EC2:48=15、Default:40=20；EC2 supports() 恒 true:56-58；timeout 配置:87"
 ---
@@ -14,7 +14,7 @@ source_refs:
 容器启动时，"我在哪个区"是怎么问出来的（CompositeZoneLocator:44 源码链）：
 
 ```
-CompositeZoneLocator.locate(environment):70
+CompositeZoneLocator.locate(environment):70（以下四层在引入 polyzone-aws 时成立；不引入时只有 Default）
   → sort：按 Ordered 排序（:55 AnnotationAwareOrderComparator）
   → for 依序试（:85）：
       ECS 文件(Order 5)      有 ECS_CONTAINER_METADATA_FILE？→ 命中即返回
@@ -25,7 +25,7 @@ CompositeZoneLocator.locate(environment):70
                  + System.setProperty("polyzone.current-zone"):119
 ```
 
-- **它干了干什么**：**责任链式探测，首个成功者胜**——环境差异被四层 Order 吃掉，上层只问 `locate()`。
+- **它干了什么**：**责任链式探测，首个成功者胜**——环境差异被四层 Order 吃掉，上层只问 `locate()`。
 - **本篇回答**：四层顺序为什么这么排？缓存与系统属性给谁看？非 AWS 环境那个 3 秒坑从哪来？
 
 ## §1 概念铺垫（What）
@@ -41,7 +41,7 @@ CompositeZoneLocator.locate(environment):70
 ## §2 关键推导（两问）
 
 **① 为什么 EC2 排在属性兜底之前、却又有 3 秒坑？**
-顺序设计没错：**云上元数据比手工配的准**（自动漂移到新可用区）。坑在 `Ec2AvailabilityZoneEndpointZoneLocator.supports()` **恒 true**（:56-58）——它不在"支持性"上把关，直接开问 `169.254.169.254`，非 AWS 环境**直到超时（默认 3s）**才轮到属性定位。README 注意事项原话：非 AWS 生产**显式配 `polyzone.zone`**，或接受首次同步的 3s 开销。
+顺序设计没错：**云上元数据比手工配的准**（自动漂移到新可用区）。坑在 `Ec2AvailabilityZoneEndpointZoneLocator.supports()` **恒 true**（:56-58）——它不在"支持性"上把关，直接开问 `169.254.169.254`，非 AWS 环境**直到超时（默认 3s）**才轮到属性定位（仅在引入 `polyzone-aws` 时出现）。README 注意事项原话：非 AWS 生产**显式配 `polyzone.zone`**（正常启动由 `ZoneContextChangedListener` 直接采用，不走定位链），或接受首次同步的 3s 开销。
 
 **② 缓存首返换来什么、失去什么？**
 得：零运行期探测开销（微秒级 locate）。失：**运行中环境变化不感知**——要改区域不走定位链，走**配置中心切换**（04 篇的正路）。**分工明确**：定位管"出生地"，切换管"迁徙"。
@@ -51,7 +51,7 @@ CompositeZoneLocator.locate(environment):70
 ## §3 掌握卡（2 条）
 
 1. **定位链**：sort→依序试→首胜缓存+系统属性——Order 5/10/15/20 = 具体到兜底。
-2. **3 秒坑的机制**：supports 恒 true → 无条件问元数据端点 → 超时回退——**处方=非 AWS 显式配 zone**（README 注意事项 1）。
+2. **3 秒坑的机制**：supports 恒 true → 无条件问元数据端点 → 超时回退——**处方=非 AWS 显式配 zone，或不引入 `polyzone-aws`**（README 注意事项 1）。
 
 ## §4 边界（一句话翻篇）
 

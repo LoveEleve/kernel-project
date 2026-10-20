@@ -42,7 +42,7 @@ next: "（本系列完）"
 
 ## §3 话术（按拷打口径自建）
 
-> "多活路由我按四段讲：**定位**用组合责任链——Order 5/10/15/20 从 ECS 元数据到属性兜底，首胜缓存+写系统属性，非 AWS 的坑是 EC2 定位器 supports 恒 true 会白等 3 秒超时。**过滤**是十步决策：能力关/偏好关/zone 无效三关，禁用区/就绪率/同区最小数三阈值——每步不满足就退化回可用列表，**偏好永远不能导致无实例可用**，且退化时 disabled 黑名单依然有效。**切换**走 EnvironmentChangeEvent 三跳：handler 表处理 7 个属性、临时监听收集真变更、ZoneContext 先提交后通知、有变才广播 ZoneContextChangedEvent——数据源这些订阅方跟着切。**回滚**靠 originalZone：首次同步记基线、null 不记防空转。和 Spring Cloud 内置比，多的是自动发现、双阈值、秒切和事件联动；注册时把 `polyzone.zone` 写进 metadata，下游 CloudServerZoneResolver 同 key 读回——就绪率阈值才立得住。"
+> "多活路由我按四段讲：**定位**用组合责任链——Order 5/10/15/20 从 ECS 元数据到属性兜底，首胜缓存+写系统属性，非 AWS 的坑是 EC2 定位器 supports 恒 true 会白等 3 秒超时。**过滤**是十步决策：能力关/偏好关/zone 无效三关，禁用区/就绪率/同区最小数三阈值——每步不满足就退化回可用列表，**偏好永远不能导致无实例可用**，且退化时 disabled 黑名单依然有效。**切换**走 EnvironmentChangeEvent 三跳：handler 表处理 6 个属性、临时监听收集真变更、ZoneContext 先提交后通知、有变才广播 ZoneContextChangedEvent——数据源这些订阅方跟着切。**回滚**靠 originalZone：首次同步记基线、null 不记防空转。和 Spring Cloud 内置比，多的是自动发现、双阈值、秒切和事件联动；注册时把 `polyzone.zone` 写进 metadata，下游 CloudServerZoneResolver 同 key 读回——就绪率阈值才立得住。"
 
 ## §4 终检（5 题，过 4 算过关）
 
@@ -56,4 +56,3 @@ next: "（本系列完）"
 
 - **PolyZone 系列 6 篇完，README 全挂链接**——poly 家族 ② 闭环。
 - 下一步：**polydata**（③，95 类/家族最大——动态多数据源+子上下文隔离+区域容错）。
-- 本 session 累计封卷 **22 个系列 / 152 篇**。

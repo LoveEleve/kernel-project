@@ -2,7 +2,7 @@
 title: "01-什么是 PolyZone：多活与区域感知"
 series: "PolyZone 异地多活路由系列"
 previous: "README.md"
-next: "02-locate-chain.md（待写）"
+next: "02-locate-chain.md"
 source_refs:
   - "仓库 README（206 行：特性表/五模块/SC 对照/定位链/十步算法/切换链）+ 源码结构已核（26 类，五模块）"
 cross_refs:
@@ -20,14 +20,14 @@ cross_refs:
 请求到北美实例 → 调 user-service → LoadBalancer 无区域意识随便挑（可能挑到欧洲节点）= 白白 +100ms
 
 接入 PolyZone：
-① 自动定位：本实例知道自己在 us-east-1a（4 类定位器，02 篇）
+① 自动定位：本实例知道自己在 us-east-1a（AWS 三类定位器需引入 polyzone-aws，02 篇）
 ② 同区优先：只在 us-east-1a 的实例里挑（十步算法，03 篇）
 ③ 保底：同区不够 → 自动退化全量列表，绝不把流量打死
 ④ 秒切：运维把 polyzone.zone 改成 eu-west-1a → 所有实例秒级切欧洲
 ⑤ 回滚：改回 originalZone → 各自回到原本区域
 ```
 
-- **它干了干什么**：**给调用装"地缘感"**——同区优先省延迟、故障区秒切、切完能回。
+- **它干了什么**：**给调用装"地缘感"**——同区优先省延迟、故障区秒切、切完能回。
 - **本篇回答**：多活要解决什么？五模块各管哪段？Spring Cloud 不是自带 ZonePreference 吗？
 
 ## §1 概念铺垫（What）
@@ -35,7 +35,7 @@ cross_refs:
 | 词 | 一句话 |
 |---|---|
 | **Zone（可用区）** | 云上物理隔离的部署单元（us-east-1a 这类）——**同区=低延迟，跨区=百 ms 级** |
-| **ZoneLocator** | 定位器 SPI（可插拔扩展点）——"我是哪个区的"（4 类实现，02 篇） |
+| **ZoneLocator** | 定位器 SPI（可插拔扩展点）——"我是哪个区的"（属性兜底内置；AWS 三类需引入 polyzone-aws，02 篇） |
 | **ZonePreferenceFilter** | 同区优先过滤器——LoadBalancer 挑实例前先过滤（十步，03 篇） |
 | **ZoneContext** | 当前区域的**单一事实源**——setZone 触发事件（04 篇） |
 | **ZoneContextChangedEvent** | 区域变更广播——数据源/Redis 等订阅联动（**polydata 双事件的另一条腿**，polyconfig 04 见过入口） |
@@ -45,7 +45,7 @@ cross_refs:
 ```
 polyzone-commons（零框架依赖：Context/Filter/Resolver）← spring ← spring-boot ← spring-cloud（LB 接线）
                                                             ↑
-                                                    polyzone-aws（三类元数据定位器）
+                                                    polyzone-aws（三类元数据定位器，可选）
 ```
 
 ## §2 为什么内置的不够（推导 + 对照表）
@@ -56,7 +56,7 @@ polyzone-commons（零框架依赖：Context/Filter/Resolver）← spring ← sp
 
 | | Spring Cloud 内置 | **PolyZone** |
 |--|--|--|
-| 区域发现 | **手动配** `spring.cloud.loadbalancer.zone` | 4 类 ZoneLocator **自动发现**（AWS EC2/ECS+属性兜底） |
+| 区域发现 | **手动配** `spring.cloud.loadbalancer.zone` | ZoneLocator **自动发现**（AWS 三类需引入 polyzone-aws；属性兜底内置） |
 | 安全阈值 | 无 | **就绪率+最小可用数双阈值**（03 篇退化保底） |
 | 禁用区域 | 无 | disabled-zone |
 | 动态切换 | 改配置需刷新上下文 | **EnvironmentChangeEvent 秒级生效** |

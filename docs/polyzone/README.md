@@ -1,7 +1,7 @@
 # PolyZone 异地多活路由系列
 
 > 语料：**polyzone 源码**（26 非测试类——已核）+ 仓库 README（206 行：特性/配置全表/定位链/十步算法/切换链/SC 对照实锤）
-> 关键锚点（已核）：ZonePreferenceFilter（:53/filter:66 十步早退 :72-153）/ CompositeZoneLocator（:44 Ordered 排序+缓存系统属性 polyzone.current-zone）/ ZoneContext（setZone:78/先提交后通知:216）/ ZoneContextChangedListener（:83/监听 EnvironmentChangeEvent:101）/ ZoneAttachmentListener（:41/:50 InstancePreRegisteredEvent）
+> 关键锚点（已核）：ZonePreferenceFilter（:53/filter:66 十步早退 :72-153）/ CompositeZoneLocator（:44 Ordered 排序+缓存系统属性 polyzone.current-zone）/ ZoneContext（setZone:75/先提交后通知:209）/ ZoneContextChangedListener（:81/onApplicationEvent:158/监听 EnvironmentChangeEvent:98）/ ZoneAttachmentListener（:41/:50 InstancePreRegisteredEvent）
 > 依赖位次：**poly 家族 ②**——polydata 依赖 polyzone-commons/spring；04 篇与 polyconfig 的双事件在 polydata 侧已见（01 系列 04 篇兑现）
 > 诚实边界：**无 lab、无拷打**；xhs 未直用——落点按"机制+对照 Spring Cloud 内置"讲
 

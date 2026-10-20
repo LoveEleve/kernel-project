@@ -2,7 +2,7 @@
 title: "03-原理二：同区域优先算法"
 series: "PolyZone 异地多活路由系列"
 previous: "02-locate-chain.md"
-next: "04-switch-link.md（待写）"
+next: "04-switch-link.md"
 source_refs:
   - "已核：ZonePreferenceFilter（:53/filter:66）逐分支行号：空:72/能力关:79/偏好关:85/zone 忽略:92/disabled 后<=1 回原始:108/就绪率:129-136/同区不足:144-148/命中:153/无匹配:159"
 ---
@@ -27,7 +27,7 @@ LoadBalancer 把 8 个实例递给过滤器，同区优先怎么判（filter:66 
 ⑧ 一个同区都没有 → 返回 targetEntities :159（跨区也得服务）
 ```
 
-- **它干了干什么**：**每一次"不满足"都退化为可用列表**——偏好是优化，永远不是可用性的对手。
+- **它干了什么**：**每一次"不满足"都退化为可用列表**——偏好是优化，永远不是可用性的对手。
 - **本篇回答**：三个阈值各保护什么？退化时 disabled 区为什么还剔着？
 
 ## §1 概念铺垫（What：三阈值 + 一语义）
@@ -48,7 +48,7 @@ LoadBalancer 把 8 个实例递给过滤器，同区优先怎么判（filter:66 
 `same-zone-min-available=5`：同区实例太少=该区容量存疑，**全压同区=故障放大器**（一个实例倒下就是 -50% 容量）。这与 02 篇"fast-fail 默认关"同哲学——**默认永远选可用性**。
 
 **③ 与负载均衡链的关系（回链 loadbalancer 系列）**：
-本过滤器是 LB 链上的**前置过滤器**（order 默认 10，README 配置表）——先缩列表，**原有负载均衡策略再在幸存者里挑**（README :89 原话"过滤出同区域实例，再交给原有负载均衡策略"）。过滤器不选实例，只**改候选集**。
+本过滤器是 LB Supplier 里的**候选集过滤器**：它不是独立的、可排序的 filter，而是被 `ZonePreferenceServiceInstanceListSupplier` 包在 `withCaching()` 之后——先缩列表，**原有负载均衡策略再在幸存者里挑**（README :89 原话"过滤出同区域实例，再交给原有负载均衡策略"）。过滤器不选实例，只**改候选集**。
 
 ## §3 掌握卡（2 条）
 
@@ -58,7 +58,7 @@ LoadBalancer 把 8 个实例递给过滤器，同区优先怎么判（filter:66 
 ## §4 边界（一句话翻篇）
 
 - ZoneResolver 泛型解析（怎么从实例里取 zone）→ 按需读。
-- filter order 可配 → 05 配置表一句。
+- 过滤器的插入位置由 LB Supplier 链决定（本项目固定为 caching 之后）→ 05 篇接线。
 - Supplier 同名撞车：本系列 `ZonePreferenceServiceInstanceListSupplier` 与 SC 内置**同名不同包**——javadoc:30 自称其"optimized replacement"（05 篇接线讲怎么换）。
 
 ## §5 Self-Test（3 题）

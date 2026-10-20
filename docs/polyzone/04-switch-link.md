@@ -2,9 +2,9 @@
 title: "04-原理三：切换与联动"
 series: "PolyZone 异地多活路由系列"
 previous: "03-preference-algorithm.md"
-next: "05-usage-config.md（待写）"
+next: "05-usage-config.md"
 source_refs:
-  - "已核：ZoneContextChangedListener（onApplicationEvent:161→tryChangeZoneContext→changeZoneContext 临时监听收集:184-191/7 属性 handler 表:166-176/有变才广播:204-213/changeZone:217 originalZone 分叉/rememberOriginalZone 只记首次:232-236）/ ZoneContext（setZone:78/先提交后通知 firePropertyChange:216-225）"
+  - "已核：ZoneContextChangedListener（onApplicationEvent:158→tryChangeZoneContext→changeZoneContext 临时监听收集:186-196/6 属性 handler 表:162-172/有变才广播:199-210/changeZone:212 originalZone 分叉/rememberOriginalZone 只记首次:225-231）/ ZoneContext（setZone:75/先提交后通知 firePropertyChange:209）"
 cross_refs:
   - "polyconfig 03（EnvironmentChangeEvent 同款入口）；polyconfig 04（polydata 双事件——本篇是它另一条腿的机制）"
 ---
@@ -17,29 +17,29 @@ cross_refs:
 
 ```
 ① 配置刷新 → Spring Cloud 发 EnvironmentChangeEvent（polyconfig 03 同款入口）
-② ZoneContextChangedListener.onApplicationEvent:161 → tryChangeZoneContext
-   → 给 ZoneContext 挂临时变更监听:184（收集这轮真变了什么）
-   → 依 7 属性 handler 表逐个处理:166-176（zone/enabled/偏好开关/order/三阈值）
-③ changeZone:217：值是 originalZone？→ revertOriginalZone（回首次记住的区域）
-                 否则 → rememberOriginalZone（仅首次记住:232）→ zoneContext.setZone
-④ setZone:78 → 新值先提交，再 firePropertyChange:225（README:192"先提交后通知"）
-⑤ 有变更才广播 ZoneContextChangedEvent:213
+② ZoneContextChangedListener.onApplicationEvent:158 → tryChangeZoneContext
+   → 给 ZoneContext 挂临时变更监听:186（收集这轮真变了什么）
+   → 依 6 属性 handler 表逐个处理:162-172（zone/enabled/偏好开关/三阈值）
+③ changeZone:212：值是 originalZone？→ revertOriginalZone（回首次记住的区域）
+                 否则 → rememberOriginalZone（仅首次记住:225）→ zoneContext.setZone
+④ setZone:75 → 新值先提交，再 firePropertyChange:209（README:192"先提交后通知"）
+⑤ 有变更才广播 ZoneContextChangedEvent:209
    → 业务订阅方：polydata 数据源联动（polyconfig 04 见过入口）、Redis 等
    → LoadBalancer 下一次 filter 即用新 zone（03 篇——毫秒级生效）
 ```
 
-- **它干了干什么**：**配置变更→上下文变更→事件广播**三跳——每跳都"有真变化才动"。
+- **它干了什么**：**配置变更→上下文变更→事件广播**三跳——每跳都"有真变化才动"。
 - **本篇回答**：为什么临时监听器这个设计？"先提交后通知"保证什么？originalZone 为什么只记首次？
 
 ## §1 概念铺垫（What）
 
 | 词 | 一句话 |
 |---|---|
-| **changeZoneContext 三段** | 挂临时监听(:184) → 跑 handler 表 → **finally 摘监听**（:191）——只收集本轮变更，不长期挂载 |
-| **7 属性 handler 表** | zone + 总开关 + 偏好开关 + filter order + 三阈值——**一个配置中心改动可以热调整条 03 篇的算法参数** |
-| **先提交后通知** | setZone 写新值在前、firePropertyChange 在后（:216-225）——**监听器里读到的永远是最新值**（README:192） |
-| **有变才广播** | propertyChangeEvents 空 → 不发（:204-206）——**与 polyconfig 03"无变不发"同一纪律** |
-| **originalZone** | 回滚基线=**首次同步记住的区域**；`rememberOriginalZone` 仅当 `originalZone==null` 记（:232-236）；**zone 为 null（定位链没找到）不记**——下次 revert 重试定位 |
+| **changeZoneContext 三段** | 挂临时监听(:186) → 跑 handler 表 → **finally 摘监听**（:196）——只收集本轮变更，不长期挂载 |
+| **6 属性 handler 表** | zone + 总开关 + 偏好开关 + 三阈值——**一个配置中心改动可以热调整 03 篇的算法参数** |
+| **先提交后通知** | setZone 写新值在前、firePropertyChange 在后（:203-209）——**监听器里读到的永远是最新值**（README:192） |
+| **有变才广播** | propertyChangeEvents 空 → 不发（:199-202）——**与 polyconfig 03"无变不发"同一纪律** |
+| **originalZone** | 回滚基线=**首次同步记住的区域**；`rememberOriginalZone` 仅当 `originalZone==null` 记（:225-231）；**zone 为 null（定位链没找到）不记**——下次 revert 重试定位 |
 
 ## §2 关键推导（两问）
 
@@ -60,7 +60,7 @@ polydata 的 listener 同时收 `ConfigPropertiesChangedEvent`（polyconfig）�
 
 ## §4 边界（一句话翻篇）
 
-- 7 个属性各自的语义 → 03 篇已讲三阈值，05 配置表收全。
+- 6 个属性各自的语义 → 03 篇已讲三阈值，05 配置表收全。
 - ApplicationStartedEvent/ContextRefreshedEvent 的首次同步细节 → 按需读:101-109。
 - ZoneContextChangedEvent 载荷结构 → 用时读。
 
