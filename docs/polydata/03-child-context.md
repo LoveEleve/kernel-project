@@ -2,9 +2,9 @@
 title: "03-原理二：子上下文隔离与 Bean 升迁"
 series: "PolyData 动态多数据源系列"
 previous: "02-config-pipeline.md"
-next: "04-hot-swap.md（待写）"
+next: "04-hot-swap.md"
 source_refs:
-  - "已核：DynamicJdbcChildContext:46（extends AnnotationConfigApplicationContext/process 复用:161）/ 建立：启动路径三步 registerParentBeans→mergeParentEnvironment→refresh（Listener:161-165），重建路径仅 merge+refresh（DynamicDataSource:197-199，registerParentBeans 全仓仅 Listener:161 一处调用）/ 升迁监听器 DynamicJdbcChildContextRefreshedListener:51（ContextRefreshedEvent/exposed 判定:157-164/默认名 childContextId+$:139/registerParentBean:149-156 双路径）/ BeanRegistrar.registerBean:54（InstanceSupplier+beanClass+primary:62）/ registerFactoryBean:84（DelegatingFactoryBean+OBJECT_TYPE_ATTRIBUTE——注释明确类型查找仍可用）/ expose/primary 属性常量 :85,:87,:109-110"
+  - "已核：DynamicJdbcChildContext:46（extends AnnotationConfigApplicationContext/process 复用:161）/ 建立：启动路径三步 registerParentBeans→mergeParentEnvironment→refresh（Listener:191-195），重建路径仅 merge+refresh（DynamicDataSource:198-200，registerParentBeans 全仓仅 Listener:191 一处调用）/ 升迁监听器 DynamicJdbcChildContextRefreshedListener:51（ContextRefreshedEvent/exposed 判定:158-167/默认名 childContextId+$:139/registerParentBean:149-156 双路径）/ BeanRegistrar.registerBean:54（InstanceSupplier+beanClass+primary:62）/ registerFactoryBean:84（DelegatingFactoryBean+OBJECT_TYPE_ATTRIBUTE——注释明确类型查找仍可用）/ expose/primary 属性常量 :85,:87,:109-110"
 ---
 
 # 03-原理二：子上下文隔离与 Bean 升迁
@@ -14,31 +14,32 @@ source_refs:
 一套配置 = 一个**独立小 Spring**（DynamicJdbcChildContext:46）：
 
 ```
-每个 polydata.jdbc.configs.<name> 长出自己的子上下文：
+多配置时，每个 polydata.jdbc.configs.<name> 长出自己的子上下文
+（单配置复用父上下文跑 6 步管道，只有 DynamicDataSource 内部再建 datasource 子上下文）：
   ├─ 自己的物理 DataSource、自己的 SqlSessionFactory、自己的事务管理器
   ├─ 跑同一条 6 步管道（:161——但 setDynamic(false) 已防递归，02 篇）
   └─ refresh 完成时 → 升迁监听器:51 醒来，把关键 Bean 搬进父上下文
        名字：childContextId + "$" + childBeanName :139（如 "orders$dataSource"）
-       类型 ∈ expose 列表（默认 DataSource 等 README:133）→ registerBean:54 + @Primary:62
+       类型 ∈ expose 列表（默认 DataSource 等 README:137）→ registerBean:54 + @Primary:62
        其余 → DelegatingFactoryBean 包一层 registerFactoryBean:84
 ```
 
 外面（业务代码）`@Autowired DataSource` 拿到的就是**升迁上来的实例**——但它的生命周期、连接池、事务都活在子上下文里。
 
-- **它干了干什么**：**隔离换并存**——MyBatis 与 MyBatis-Plus 打架？各关各的子上下文互看不见；升迁让外面**用起来像一个 Spring**。
-- **本篇回答**：隔离什么、并存怎么实现？升迁的两条注册路径差在哪？为什么默认 @Primary？
+- **它干了什么**：**隔离换并存**——MyBatis 与 MyBatis-Plus 打架？各关各的子上下文互看不见；升迁让外面**用起来像一个 Spring**。
+- **本篇回答**：隔离什么、并存怎么实现？升迁的两条注册路径差在哪？为什么需要配置级 `"primary":true`？
 
 ## §1 概念铺垫（What）
 
 | 词 | 一句话 |
 |---|---|
-| **子上下文** | `AnnotationConfigApplicationContext` 子类:46——**有自己的 BeanFactory**；启动路径三步建立：registerParentBeans→mergeParentEnvironment→refresh（:161-165） |
-| **隔离边界** | 每配置的 DataSource/SqlSessionFactory/事务只在自己上下文——**类加载器之外的第二重隔离**（README:35"ORM 隔离与并存"） |
+| **子上下文** | `AnnotationConfigApplicationContext` 子类:46——**有自己的 BeanFactory**；启动路径三步建立：registerParentBeans→mergeParentEnvironment→refresh（:191-195） |
+| **隔离边界** | 多配置时每配置的 DataSource/SqlSessionFactory/事务只在自己上下文——**类加载器之外的第二重隔离**（README:35"ORM 隔离与并存"）；单配置复用父上下文 |
 | **升迁（expose）** | 子 refresh 后由监听器:51 把**类型命中 expose 列表**的 Bean 注册进父（判定:157-164）——范围可配（`bean-classes.expose`:109-110，默认 DataSource 等） |
 | **双路径注册** | expose 类→`registerBean:54`（实例+beanClass+primary:62）；其余→`registerFactoryBean:84`（DelegatingFactoryBean 委派）——**源码注释明确：两条路类型查找（getBean(Class)）都可用**（OBJECT_TYPE_ATTRIBUTE 保留目标类型） |
-| **@Primary** | `bean-classes.primary` 列表默认也含 DataSource——**多个配置并存时父上下文的按类型注入要有明确赢家** |
+| **@Primary** | 需要**两个条件同时满足**：配置 JSON 里 `"primary":true`，且 Bean 类型在 `bean-classes.primary` 列表（默认含 DataSource）——只有类型列表不会自动产生 @Primary |
 
-**命名规则**：`childContextId + "$" + beanName`（:139）——**不会撞**：每个子上下文 ID 不同（README:30"每配置一个 DynamicJdbcChildContext"）。SPI `ParentContextBeanNameGenerator` 可自定义。
+**命名规则**：`childContextId + "$" + beanName`（:139）——**前提是 `name` 唯一**：子上下文 ID 由配置 `name` 生成，重复 name 会在父上下文 Bean 名碰撞，现已在校验阶段拒绝。SPI `ParentContextBeanNameGenerator` 可自定义。
 
 ## §2 关键推导（两问）
 
@@ -54,7 +55,7 @@ expose 走直注（父直接持有实例定义，@Primary 生效于类型注入�
 ## §3 掌握卡（2 条）
 
 1. **一配置一世界**：子上下文启动三步建立（父 Bean 注册/环境合并/refresh）→ 同管道装配 → 隔离边界=ORM 并存的根。
-2. **升迁=引用上交**：expose 列表定范围、默认名防撞、@Primary 定赢家；**双路径类型查找都通**（源码注释背书）。
+2. **升迁=引用上交**：expose 列表定范围、name 唯一防撞、`"primary":true` + primary 列表定赢家；**双路径类型查找都通**（源码注释背书）。
 
 ## §4 边界（一句话翻篇）
 
@@ -66,7 +67,7 @@ expose 走直注（父直接持有实例定义，@Primary 生效于类型注入�
 
 - Q1：子上下文建立三步？和父的环境什么关系？
 - Q2：升迁解决什么问题？"引用上交"指什么？
-- Q3：expose 与 primary 两个列表各管什么？双路径类型查找可用吗？
+- Q3：expose 与 primary 两个列表各管什么？配置级 `"primary":true` 起什么作用？双路径类型查找可用吗？
 
 ## §6 衔接
 

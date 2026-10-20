@@ -2,7 +2,7 @@
 title: "06-原理五：ORM 并存与分片集成"
 series: "PolyData 动态多数据源系列"
 previous: "05-zone-ha.md"
-next: "07-usage.md（待写）"
+next: "07-usage.md"
 source_refs:
   - "已核：互斥链 getModuleAutoConfigurationBannedModules:164→getModuleExclusionAutoConfigurationClassNames:169-177（banned 模块→排除其自动配置类）消费方 AbstractModuleConfigConfigurationPropertiesSynthesizer:74/SS Synthesizer:51；default.properties 双向互斥 :45/:49、:12/:33；前缀白名单 DynamicJdbcAutoConfigurationImportFilter:41（match:65-74/isClassPresent:76）；每模块 4 SPI 对称（mybatis/mybatisplus 均含 config/context/env/validation）；@MapperScan 占位 MybatisMapperScanConfiguration:51；SS 工厂 ShardingSphereConfigurationConfigBeanDefinitionRegistrar:115 YamlShardingSphereDataSourceFactory.createDataSource(dataSourceMap, yamlContent)"
 cross_refs:
@@ -32,7 +32,7 @@ polydata.jdbc.configs.goods={"name":"goods","datasource":[...],"sharding-sphere"
 
 **分片**：注册器（4 SPI 之一）直接调 `YamlShardingSphereDataSourceFactory.createDataSource(dataSourceMap, yamlContent):115`——**物理源取自 polydata 配置、规则取自 YAML**（README:36"不依赖官方 starter"）。
 
-- **它干了干什么**：**并存=排除+过滤+隔离三件套**；分片=把 SS 5.5.1 当"数据源工厂"嵌进来。
+- **它干了什么**：**并存=排除+过滤+隔离三件套**；分片=把 SS 5.5.1 当"数据源工厂"嵌进来。
 - **本篇回答**：4 SPI 在模块里怎么对称落地？@MapperScan 占位怎么工作？SS 为什么能不走 starter？
 
 ## §1 概念铺垫（What）
@@ -50,10 +50,10 @@ polydata.jdbc.configs.goods={"name":"goods","datasource":[...],"sharding-sphere"
 两者都会抢同一批扩展点（orm-pool 07/06 讲过：都动 SqlSessionFactory 生态）——**同上下文里两边自动配置都跑=装配冲突/后到覆盖**。banned 在启动最早期（auto-config 过滤）就把对方拦掉：**同一子上下文里只会有赢家**，输家在另一个子上下文（③隔离）赢——**"并存"的真相是"各自独赢"**。
 
 **② SS 为什么不依赖官方 starter？**
-starter 的职责=自动配置+属性绑定——polydata 已有自己的管道（属性绑定、校验、装配全有），**再套 starter=两套自动配置打架**（与①同理）。直接用 `YamlShardingSphereDataSourceFactory` 核心 API：**数据源从自己的配置来、规则从 YAML 来**——控制权完整。README:163"移除 Mode/Rule swapper 注册与属性合成等旧机制"=同一取舍。
+starter 的职责=自动配置+属性绑定——polydata 已有自己的管道（属性绑定、校验、装配全有），**再套 starter=两套自动配置打架**（与①同理）。直接用 `YamlShardingSphereDataSourceFactory` 核心 API：**数据源从自己的配置来、规则从 YAML 来**——控制权完整。README:166"移除 Mode/Rule swapper 注册与属性合成等旧机制"=同一取舍。
 
 **③ 与已封卷系列的对账**：
-分片规则怎么写/怎么路由 → **shardingsphere 系列**（t_order→t_order_0/1 用例 README:156 与该系列同款）；MP 怎么用 → **orm-pool 07**——**本篇只负责"建与并"，不重复内核**。
+分片规则怎么写/怎么路由 → **shardingsphere 系列**（t_order→t_order_0/1 用例 README:159 与该系列同款）；MP 怎么用 → **orm-pool 07**——**本篇只负责"建与并"，不重复内核**。
 
 ## §3 掌握卡（2 条）
 
@@ -64,7 +64,8 @@ starter 的职责=自动配置+属性绑定——polydata 已有自己的管道�
 
 - 分片规则/算法/读写分离 → shardingsphere 系列翻篇。
 - MP wrapper/逻辑删除 → orm-pool 07 已封卷。
-- SS Cluster/治理中心 → Roadmap:172 未实现。
+- SS 默认连接池参数命名（Hikari `maximumPoolSize`/`minimumIdle`）→ 源码 default.properties；
+- SS Cluster/治理中心 → Roadmap:176 未实现。
 
 ## §5 Self-Test（3 题）
 

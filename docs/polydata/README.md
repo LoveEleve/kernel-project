@@ -1,10 +1,10 @@
 # PolyData 动态多数据源系列
 
-> 语料：**polydata 源码**（95 非测试类，单模块 polydata-jdbc-spring-boot——已核）+ 仓库 README（177 行：例子/特性/6 步管道/4 SPI/配置参考/版本基线实锤）
-> 关键锚点（已核）：DynamicJdbcContextProcessor（:56/管道 process:66-86 六步 :69,74,77,79,83,86）/ DynamicDataSource（:56/volatile delegate:82/:84/synchronized 原子替换 :202-205/延迟关闭 :213/深克隆 :237）/ DynamicJdbcConfigUtils.cloneDynamicJdbcConfig:176 / DynamicJdbcChildContext:46（extends AnnotationConfigApplicationContext）/ Bean 升迁 DynamicJdbcContextRefreshedListener:157-164 / ha 选库 DynamicJdbcConfig:249-257（zone 缺回退 defaultZone）/ 双事件汇聚 PropagatingDynamicJdbcConfigChangedEventListener:47→RefreshingDynamicDataSourceListener:312
+> 语料：**polydata 源码**（95 非测试类，单模块 polydata-jdbc-spring-boot——已核）+ 仓库 README（181 行：例子/特性/6 步管道/4 SPI/配置参考/版本基线实锤）
+> 关键锚点（已核）：DynamicJdbcContextProcessor（:56/管道 process:66-86 六步 :69,74,77,79,83,86）/ DynamicDataSource（:56/volatile delegate:82/:84/synchronized 原子替换 :211-214/延迟关闭 :222/深克隆 :246）/ DynamicJdbcConfigUtils.cloneDynamicJdbcConfig:176 / DynamicJdbcChildContext:46（extends AnnotationConfigApplicationContext）/ Bean 升迁 DynamicJdbcChildContextRefreshedListener:158-167 / ha 选库 DynamicJdbcConfig:249-257（zone 缺回退 defaultZone）/ 双事件汇聚 PropagatingDynamicJdbcConfigChangedEventListener:47→RefreshingDynamicDataSourceListener:321
 > 依赖位次：**poly 家族 ③**（依赖 ① polyconfig + ② polyzone——本系列是两者的消费端总装）
-> 版本基线（README :160）：Boot 3.2.5 / ShardingSphere 5.5.1 核心+YamlShardingSphereDataSourceFactory / MyBatis 3.0.5 / MyBatis-Plus 3.5.7——与全会话口径一致
-> 诚实边界：**无 lab、无拷打**；测试全 H2（80 个用例，README :156）
+> 版本基线（README :161）：Boot 3.2.5 / ShardingSphere 5.5.1 核心+YamlShardingSphereDataSourceFactory / MyBatis 3.0.5 / MyBatis-Plus 3.5.7——与全会话口径一致
+> 诚实边界：**无 lab、无拷打**；测试全 H2（93 个用例，README :159）
 
 ## 一、总表（8 篇：概念 → 原理 → 使用 → 面试）
 
@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | 01 | [什么是 PolyData：架构全景](01-what-is-polydata.md) | **概念** | 四件事/6 步管道/4 SPI；与生态关系 | 仓库 README |
 | 02 | [原理一：配置模型与 6 步管道](02-config-pipeline.md) | **原理** | JSON 配置怎么变成运行时上下文 | Processor 源码 |
-| 03 | [原理二：子上下文隔离与 Bean 升迁](03-child-context.md) | **原理** | 每配置一个子上下文；expose/primary 升迁 | ChildContext/升迁监听器 |
+| 03 | [原理二：子上下文隔离与 Bean 升迁](03-child-context.md) | **原理** | 多配置时一配置一子上下文（单配置复用父上下文）；expose/primary 升迁 | ChildContext/升迁监听器 |
 | 04 | [原理三：热替换](04-hot-swap.md) | **原理** | 深克隆→重建→volatile+synchronized 原子换→延迟关 | DynamicDataSource 源码 |
 | 05 | [原理四：多活选库与容错](05-zone-ha.md) | **原理** | ha-datasource 按 zone 选库/回退；双事件驱动 | DynamicJdbcConfig/双监听器 |
 | 06 | [原理五：ORM 并存与分片集成](06-orm-sharding.md) | **原理** | banned-modules 互斥/隔离并存；YAML 工厂建分片源 | mybatis/模块与 SS 源码 |

@@ -2,9 +2,9 @@
 title: "05-原理四：多活选库与容错"
 series: "PolyData 动态多数据源系列"
 previous: "04-hot-swap.md"
-next: "06-orm-sharding.md（待写）"
+next: "06-orm-sharding.md"
 source_refs:
-  - "已核：DynamicJdbcConfig.getDataSourcePropertiesList:246-264（ha 分支 :249→zone 查表 :251/缺省回退 defaultZone :253-257/非 ha 返回静态表 :259-263）调用方=DataSourceConfigurationPropertiesSynthesizer:71（管道 step5）+校验器 :85 / PropagatingDynamicJdbcConfigChangedEventListener（supportsEventType 双事件:66/onApplicationEvent:70/配置分支 key 匹配:79-87/zone 分支:90-100+isZoneChanged 判 "zone":102-111/publish:115+）→ DynamicJdbcConfigChangedEvent → 04 篇入口 :312"
+  - "已核：DynamicJdbcConfig.getDataSourcePropertiesList:246-264（ha 分支 :249→zone 查表 :251/缺省回退 defaultZone :253-257/非 ha 返回静态表 :259-263）调用方=DataSourceConfigurationPropertiesSynthesizer:71（管道 step5）+校验器 :73-107 / PropagatingDynamicJdbcConfigChangedEventListener（supportsEventType 双事件:66/onApplicationEvent:70/配置分支 key 匹配:79-87/zone 分支:90-100+isZoneChanged 判 "zone":102-111/publish:115+）→ DynamicJdbcConfigChangedEvent → 04 篇入口 :321"
 cross_refs:
   - "polyzone ②（ZoneContext/切换链/originalZone 回滚——本篇是其消费端）+ polyconfig ①（配置事件）"
 ---
@@ -31,14 +31,14 @@ cross_refs:
 底层兜底：某 zone 查不到 → 回退 defaultZone:253-257（不空手）
 ```
 
-- **它干了干什么**：**区域状态→选库→热切换**的接线——polydata 不发明区域逻辑，**只消费 polyzone 的状态与事件**。
+- **它干了什么**：**区域状态→选库→热切换**的接线——polydata 不发明区域逻辑，**只消费 polyzone 的状态与事件**。
 - **本篇回答**：选库发生在哪个时点？双分支各处理什么？"故障恢复"到底是谁在恢复？
 
 ## §1 概念铺垫（What）
 
 | 词 | 一句话 |
 |---|---|
-| **ha-datasource** | 配置模型的"多活槽"：`{zone1:[...], zone2:[...]}` ——与静态 `datasource` 二选一（hasHighAvailabilityDataSource 判定） |
+| **ha-datasource** | 配置模型的"多活槽"：`{zone1:[...], zone2:[...]}` ——与静态 `datasource` 二选一（hasHighAvailabilityDataSource 判定）；校验器会遍历**所有 zone**，每 zone 默认恰好一个源（分片模块存在时允许多个），defaultZone 不能为空 |
 | **选库时点** | **重建时**才查表——getDataSourcePropertiesList:246 被管道 step5 的 Synthesizer:71 调用（02 篇第 5 步的实战用途）；**不是每次 getConnection 查**（池建好就定，运行零开销） |
 | **双分支监听** | 分支 A 配置变（ConfigPropertiesChangedEvent）：**按属性名精确匹配** `polydata.jdbc.configs.*`:79-87；分支 B 区域变（ZoneContextChangedEvent）：**判 "zone" 键**:107 + **只处理带 ha 的配置**:96 |
 | **回退 defaultZone** | zone 查不到 → defaultZone:253-257——**换区失败也有库可连**（与 03 篇"偏好不致死"同哲学） |

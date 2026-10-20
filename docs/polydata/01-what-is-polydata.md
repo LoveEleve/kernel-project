@@ -2,9 +2,9 @@
 title: "01-什么是 PolyData：架构全景"
 series: "PolyData 动态多数据源系列"
 previous: "README.md"
-next: "02-config-pipeline.md（待写）"
+next: "02-config-pipeline.md"
 source_refs:
-  - "仓库 README（177 行：例子/核心特性 8 条/架构图/4 SPI/版本基线）+ 源码结构已核（95 类，10 个包）"
+  - "仓库 README（181 行：例子/核心特性 8 条/架构图/4 SPI/版本基线）+ 源码结构已核（95 类，12 个顶层包）"
 cross_refs:
   - "polyconfig ①（配置事件）+ polyzone ②（区域事件）——本系列是两者的总装消费端；orm-pool 05-07（MyBatis/MP 内核）；shardingsphere（分片内核）"
 ---
@@ -32,7 +32,7 @@ polydata.jdbc.configs.orders={"name":"orders","ha-datasource":{ \
 ④ 引了 sharding-sphere 模块 → ShardingSphere 5.5.1 数据源直接从同一份配置建出来
 ```
 
-- **它干了干什么**：**多套数据源的生命周期管理**——建（隔离）、换（原子热替换）、选（区域路由）、并（ORM 共存）。
+- **它干了什么**：**多套数据源的生命周期管理**——建（隔离）、换（原子热替换）、选（区域路由）、并（ORM 共存）。
 - **本篇回答**：整体架构几层？和 polyconfig/polyzone 是什么关系？
 
 ## §1 概念铺垫（What：架构全景——README :40-62 图）
@@ -44,7 +44,7 @@ polydata.jdbc.configs.orders={"name":"orders","ha-datasource":{ \
                 1 注册处理器 2 PostProcessor 预处理 3 Validator 校验（失败阻断启动）
                 4 processDynamic 注册 DynamicDataSource（深克隆） 5 属性合成 6 注册模块 BeanDefinition
 运行层   DynamicDataSource（父上下文门面:56）
-           └─ DynamicJdbcChildContext（每配置一个子上下文:46）
+           └─ DynamicJdbcChildContext（多配置时每配置一个子上下文:46；单配置由 DynamicDataSource 内部建 datasource 子上下文）
                 ├─ 物理源 / 分片源 / MyBatis(+) / 事务（按模块装配）
                 └─ 升迁 → 父上下文（DataSource/TransactionManager/SqlSessionFactory:157-164）
 事件层   ZoneContextChangedEvent（②）─┐
@@ -57,9 +57,11 @@ polydata.jdbc.configs.orders={"name":"orders","ha-datasource":{ \
 | SPI | 职责 |
 |---|---|
 | ConfigPostProcessor | 预处理（默认值/规范化） |
-| ConfigValidator | 校验——**失败阻断启动** |
+| ConfigValidator | 校验——**失败阻断启动**（HA 的所有 zone 与 datasource 数量都会校验） |
 | ConfigConfigurationPropertiesSynthesizer | 合成 `spring.*` 属性 |
 | ConfigBeanDefinitionRegistrar | 注册模块 BeanDefinition |
+
+（另有 `ParentContextBeanNameGenerator` 命名 SPI，不属于配置管道四件套，03 篇升迁用。）
 
 ## §2 定位与关系（推导）
 
@@ -67,11 +69,11 @@ polydata.jdbc.configs.orders={"name":"orders","ha-datasource":{ \
 
 **But**：常见轮子解决"切"（路由到已有源），不解决三件事——**并存**（MyBatis 与 MP 同进程互斥打架）、**多活**（跨区选库+区域事件联动）、**热换**（不是切路由而是**换连接池**且不杀在途请求）。
 
-**Therefore**：PolyData = **"每配置一世界"的隔离派**——子上下文隔离解决并存，事件驱动重建解决热换，ha-datasource 消费 polyzone 解决多活。
+**Therefore**：PolyData = **多配置时"每配置一世界"的隔离派**——子上下文隔离解决并存，事件驱动重建解决热换，ha-datasource 消费 polyzone 解决多活；单配置复用父上下文，避免无意义的双上下文开销。
 
 **Cost**：子上下文+升迁比直连复杂——03 篇的"为什么值得"。
 
-**生态位**（README :136-141）：**polyconfig 管配置从哪来、polyzone 管区域在哪、polydata 管数据源怎么建怎么换**——三者用事件接线（04/05 篇全兑现）。
+**生态位**（README :139-141）：**polyconfig 管配置从哪来、polyzone 管区域在哪、polydata 管数据源怎么建怎么换**——三者用事件接线（04/05 篇全兑现）。
 
 ## §3 掌握卡（2 条）
 
