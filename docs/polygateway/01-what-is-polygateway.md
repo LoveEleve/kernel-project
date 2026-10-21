@@ -2,7 +2,7 @@
 title: "01-什么是 PolyGateway：接口级路由"
 series: "PolyGateway 接口级网关系列"
 previous: "README.md"
-next: "02-provider-publish.md（待写）"
+next: "02-provider-publish.md"
 source_refs:
   - "study-guide §1（两条路线缺口/例子）§3（16 类四模块地图）+ 源码结构已核（4 模块 16 主类路径全查）"
 cross_refs:
@@ -31,7 +31,7 @@ PolyGateway（接上后）：
     POST 同路径但 Content-Type 不符          → 404（媒体类型谓词不匹配）
 ```
 
-- **它干了干什么**：**"配置零维护"与"接口级精确控制"不再二选一**——清单由服务自己发，网关自动变精确。
+- **它干了什么**：**"配置零维护"与"接口级精确控制"不再二选一**——清单由服务自己发，网关自动变精确。
 - **本篇回答**：方案一句话是什么？四模块各管哪段？
 
 ## §1 概念铺垫（What）

@@ -2,9 +2,9 @@
 title: "03-原理二：路由生成与请求旅程"
 series: "PolyGateway 接口级网关系列"
 previous: "02-provider-publish.md"
-next: "04-refresh-tradeoffs.md（待写）"
+next: "04-refresh-tradeoffs.md"
 source_refs:
-  - "已核：WebEndpointRouteDefinitionLocator（getInstances:126/LinkedHashSet 并集:130/contextPath 首个非空:143-144/排除 debug:153/createRouteDefinition:169,174/createPredicates:201-218/取反跳过:229-232/Pattern.quote:245/paths 公式:255-263/STRIP_PREFIX_FILTER:89/routeOrder:266-285）+ Consumes/Produces 两个自研谓词工厂（gateway/predicate/）"
+  - "已核：WebEndpointRouteDefinitionLocator（getInstances:126/LinkedHashSet 并集:130/contextPath 首个非空:143-144/排除 debug:153/createRouteDefinition:169,174/createPredicates:201-219/取反跳过:229-232/Pattern.quote:245/paths:250-257/STRIP_PREFIX_FILTER:89/routeOrder:266-285）+ Consumes/Produces 两个自研谓词工厂（gateway/predicate/）"
 cross_refs:
   - "gateway 系列（SCG 谓词/过滤器链/RouteDefinitionLocator 语义已封卷——本篇是其应用）"
 ---
@@ -30,10 +30,10 @@ cross_refs:
 无路由匹配 → SCG 默认 404（"隐藏接口"的语义来源）
 ```
 
-- **它干了干什么**：**生成期把清单翻译成 RouteDefinition，请求期全是官方机制**——路径公式（:255-263）与特异排序（:266-285）是两把钥匙。
+- **它干了什么**：**生成期把清单翻译成 RouteDefinition，请求期全是官方机制**——路径公式（:250-257）与特异排序（:266-285）是两把钥匙。
 - **本篇回答**：六维怎么映射成谓词？路径变换为什么正好对上？排除为什么放生成期？
 
-## §1 概念铺垫（What：六维→谓词映射表——:201-218 逐行）
+## §1 概念铺垫（What：六维→谓词映射表——:201-219 逐行）
 
 | 端点维度 | 谓词 | 编码细节 |
 |---|---|---|
@@ -48,7 +48,7 @@ cross_refs:
 
 ## §2 路径公式与特异排序（两把钥匙）
 
-**路径三行**（:255-263 读码即背）：
+**路径三行**（:250-257 读码即背）：
 
 ```
 生成：routePath = "/" + serviceId + contextPath + endpointPattern
@@ -61,8 +61,8 @@ cross_refs:
 
 ## §3 生成期排除与全实例并集
 
-- **排除**（isExcluded:286→Exclusion.matches:90 六维 AND、patterns 必填 :32）：命中→**不生成路由**→404——**零运行时开销、无隐藏转发面**；代价=规则变更等下次心跳（04 篇刷新链）。
-- **并集**（:130 LinkedHashSet）：全实例清单合并——**金丝雀实例独有接口也能路由**；坏 metadata 只 warn 跳过（catch :138-139，guide §4.5）；contextPath 取第一个非空 :143-144。
+- **排除**（isExcluded:287→Exclusion.matches:90 六维 AND、patterns 必填 :32）：命中→**不生成路由**→404——**零运行时开销、无隐藏转发面**；代价=规则变更等下次心跳（04 篇刷新链）。
+- **并集**（:130 LinkedHashSet）：全实例清单合并——**金丝雀实例独有接口也能路由**；同一接口跨实例的 id 由内容哈希保证一致，并集按六维去重；坏 metadata 只 warn 跳过（catch :138-139，guide §4.5）；contextPath 取第一个非空 :143-144。
 
 ## §4 掌握卡（2 条）
 

@@ -1,9 +1,9 @@
 # PolyGateway 接口级网关系列
 
 > 语料：**polygateway 源码**（4 模块 / 16 主类——已核）+ **docs/polygateway/polygateway-study-guide.md**（280 行吃透指南：全链路/16 类地图/7 陷阱/12 题自测——**本系列的总索引，保留不删**）+ 仓库 README
-> 关键锚点（已核）：WebEndpointRouteDefinitionLocator（:73/loadRouteDefinitions:110/createRouteDefinition:169,173/routeOrder:266-285 公式逐字/STRIP_PREFIX_FILTER:89）/ WebEndpointMapping（:44/stableId:160-171 六维 31 链）/ WebEndpointExclusion（AND:28/patterns 必填:32/matches:90）/ Collector（排序:65/comparator:131）/ RefreshListener（:34/HeartbeatEvent→RefreshRoutesEvent 无条件:43-44）
+> 关键锚点（已核）：WebEndpointRouteDefinitionLocator（:73/loadRouteDefinitions:110/createRouteDefinition:169,173/routeOrder:266-285 公式逐字/STRIP_PREFIX_FILTER:89）/ WebEndpointMapping（:44/stableId:160-169 六维 31 链（kind.name））/ WebEndpointExclusion（AND:28/patterns 必填:32/matches:90）/ Collector（排序:66/comparator:131）/ RefreshListener（:34/HeartbeatEvent→RefreshRoutesEvent 无条件:43-44）
 > 依赖位次：**poly 家族 ④**（独立于 ①②③——网关只消费注册中心元数据）
-> 诚实边界：39 测试全绿（E2E 9 场景）；**xhs 未直用**（xhs 网关是 spring-cloud-gateway 直配）——落点按"机制+取舍"讲
+> 诚实边界：42 测试全绿（E2E 9 场景）；**xhs 未直用**（xhs 网关是 spring-cloud-gateway 直配）——落点按"机制+取舍"讲
 
 ## 一、总表（6 篇：概念 → 原理 → 使用 → 面试）
 

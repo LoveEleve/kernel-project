@@ -2,9 +2,9 @@
 title: "04-原理三：刷新与接入取舍"
 series: "PolyGateway 接口级网关系列"
 previous: "03-route-generation.md"
-next: "05-usage-pitfalls.md（待写）"
+next: "05-usage-pitfalls.md"
 source_refs:
-  - "已核：PolyGatewayRouteRefreshListener（:34 监听 HeartbeatEvent/无条件发布 RefreshRoutesEvent:43-44）/ applyFilterRules:185-197（matches:77 后 filters.addAll——StripPrefix 保留:182 注释）/ PolyGatewayFilterRule 语义（:32-34 services 精确/patterns Ant/methods 交集、空=全）/ GatewayAutoConfiguration（:48 @ConditionalOnClass(RouteDefinitionLocator+DiscoveryClient)/enabled:49）/ ProviderAutoConfiguration（:45-46 SERVLET+事件类在场）/ pom：SCG optional:27-28+loadbalancer 显式:33-37（注释实锤）"
+  - "已核：PolyGatewayRouteRefreshListener（:34 监听 HeartbeatEvent/无条件发布 RefreshRoutesEvent:43-44）/ applyFilterRules:184-199（matches:77 后 filters.addAll——StripPrefix 保留:182 注释）/ PolyGatewayFilterRule 语义（:32-34 services 精确/patterns Ant/methods 交集、空=全）/ GatewayAutoConfiguration（:52-57 @AutoConfiguration/@AutoConfigureOrder(LOWEST_PRECEDENCE):53/@ConditionalOnClass:54/enabled:55）/ ProviderAutoConfiguration（:45-46 SERVLET+事件类在场）/ pom：SCG optional:27-28+loadbalancer 显式:33-37（注释实锤）"
 ---
 
 # 04-原理三：刷新与接入取舍
@@ -39,7 +39,7 @@ SCG starter 声明 optional → 只用 provider 侧的 MVC 服务不被拖进网
 loadbalancer 必须显式引 → SCG 自己也把它 optional 了，不引则 lb:// 全 503（陷阱簿 #1）
 ```
 
-- **它干了干什么**：刷新=**无条件重算**（简单即可靠）；接入=**把匹配与选实例全部让渡给官方**。
+- **它干了什么**：刷新=**无条件重算**（简单即可靠）；接入=**把匹配与选实例全部让渡给官方**。
 - **本篇回答**：心跳链为什么"无脑刷"？filterRules 挂在哪？两个 optional 各防什么？
 
 ## §1 概念铺垫（What）
@@ -48,16 +48,19 @@ loadbalancer 必须显式引 → SCG 自己也把它 optional 了，不引则 lb
 |---|---|
 | **无条件 RefreshRoutesEvent** | :43-44 不判断心跳内容——**30s 一次全量重算是可接受成本**，启发式的漏刷不可接受 |
 | **locator 无内部缓存** | 每次 loadRouteDefinitions 现算——缓存责任在 CachingRouteLocator（官方层），**自己不再叠一层**（与"翻译不替代"同哲学） |
-| **filterRules** | 按 services/patterns/methods 三维匹配（:77，空=全 :32-34）→ filters.addAll:192 **追加在 StripPrefix 之后**（:182 注释）——限流/重试等官方过滤器按规则上车 |
-| **条件装配双侧** | gateway 侧 :48-49（有 RouteDefinitionLocator+DiscoveryClient 类且开关开）；provider 侧 :45-46（SERVLET Web+注册前事件类在场）——**类在场才装配，防误引入** |
+| **filterRules** | 按 services/patterns/methods 三维匹配（:77，空=全 :32-34）→ filters.addAll:193 **追加在 StripPrefix 之后**（:182 注释）——限流/重试等官方过滤器按规则上车 |
+| **条件装配双侧** | gateway 侧 :52-57（有 RouteDefinitionLocator+DiscoveryClient 类且开关开，**@AutoConfigureOrder 最后排序 :53**）；provider 侧 :45-46（SERVLET Web+注册前事件类在场）——**类在场才装配，防误引入** |
 
-## §2 关键推导（两问）
+## §2 关键推导（三问）
 
 **① 为什么"无条件刷"反而是对的？**
 心跳 30s 级——**每次刷新成本=重读 metadata+重生成路由（毫秒到几十毫秒）**；而"判断心跳值变没变"的启发式一旦漏判（注册中心不发心跳/值没变但实例换血），**新接口不可路由且无告警**。**可靠性>微优化**——简单策略赢。
 
-**② filterRules 为什么挂生成期（:192 在 createRouteDefinition 里）而不是过滤器链？**
-与排除同理：挂生成期=**路由带着 filter 出生**——actuator 可见、与 yaml 静态路由同构；请求期再判断=每请求一次规则匹配（guide §5 代价行）。**生成期做完所有决定**是本项目的一贯姿势（排除:286、filterRules:185、路径拼接:255 全在生成期）。
+**② filterRules 为什么挂生成期（:193 在 createRouteDefinition 里）而不是过滤器链？**
+与排除同理：挂生成期=**路由带着 filter 出生**——actuator 可见、与 yaml 静态路由同构；请求期再判断=每请求一次规则匹配（guide §5 代价行）。**生成期做完所有决定**是本项目的一贯姿势（排除:287、filterRules:185、路径拼接:250 全在生成期）。
+
+**③ 为什么 gateway 自动配置要最后排序？**
+`@ConditionalOnBean(DiscoveryClient.class)` 是**注册期条件**：如果 PolyGateway 的自动配置先于 `SimpleDiscoveryClientAutoConfiguration` 等 discovery 自动配置处理，`DiscoveryClient` 还没注册，locator 就会被静默跳过。`@AutoConfigureOrder(Ordered.LOWEST_PRECEDENCE):53` 让它在所有自动配置之后处理，才能看到 simple/Nacos/Eureka 等贡献的 `DiscoveryClient`（测试见 `testGatewayLocatorWithSimpleDiscoveryClient`）。
 
 ## §3 掌握卡（2 条）
 

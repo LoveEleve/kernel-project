@@ -20,7 +20,7 @@ next: "（本系列完）"
 | 篇 | 一句话考点 | 回链 |
 |---|---|---|
 | 01 | 两条路线缺口→"清单服务发、路由网关生成"；四模块单向依赖 | 01 |
-| 02 | 发布四步；id 跨实例一致（确定性排序:65+按序:141）；注册前最后一班车 | 02 |
+| 02 | 发布四步；id 跨实例一致（stableId:160-169 内容哈希，非序号）；注册前最后一班车 | 02 |
 | 03 | 六维→谓词全表；路径三行公式；特异公式；生成期排除；金丝雀并集 | 03 |
 | 04 | 刷新 4 步（无条件刷）；filterRules 生成期挂载；Locator vs GlobalFilter；双 optional | 04 |
 | 05 | 7 陷阱三分类；配置双前缀；E2E 九场景动手路径 | 05 |
@@ -41,7 +41,7 @@ next: "（本系列完）"
 
 ## §3 话术（按拷打口径自建）
 
-> "PolyGateway 解决 SCG 两条路线的缺口——手写路由维护贵、discovery.locator 粒度粗会把内部接口透出去。做法：服务在 InstancePreRegisteredEvent 时把 HTTP 接口扫成六维清单（路径/方法/参数/头/consume/produce），确定性排序赋 id 保证跨实例一致，encode 进实例 metadata，context-path 成对发。网关侧用 RouteDefinitionLocator 把全实例清单取并集（金丝雀友好、坏数据跳过）翻译成标准路由：六维映射 Path/Method/Query/Header 谓词、字面值 Pattern.quote 转义、取反条件跳过，Content-Type/Accept 官方没有就自研两个谓词工厂。路径公式'服务名前缀进 Path、StripPrefix 只剥它、context-path 保留'，特异公式'字面×2+变量'负数排序保证精确路由先赢。排除和 filterRules 都在**生成期**做——隐藏接口不生成路由直接 404，零运行时开销。刷新是心跳无条件发 RefreshRoutes、locator 每次现算不叠缓存。整体取舍：匹配、选实例、可观测全部让渡给 SCG 官方机制，自己只做清单到路由的翻译；代价是依赖上要把 loadbalancer 显式引进来，否则 lb:// 全 503。"
+> "PolyGateway 解决 SCG 两条路线的缺口——手写路由维护贵、discovery.locator 粒度粗会把内部接口透出去。做法：服务在 InstancePreRegisteredEvent 时把 HTTP 接口扫成六维清单（路径/方法/参数/头/consume/produce），排序（输出稳定）+ 六维内容哈希赋 id 保证跨实例一致（金丝雀接口集不同也不漂移），encode 进实例 metadata，context-path 成对发。网关侧用 RouteDefinitionLocator 把全实例清单取并集（金丝雀友好、坏数据跳过）翻译成标准路由：六维映射 Path/Method/Query/Header 谓词、字面值 Pattern.quote 转义、取反条件跳过，Content-Type/Accept 官方没有就自研两个谓词工厂。路径公式'服务名前缀进 Path、StripPrefix 只剥它、context-path 保留'，特异公式'字面×2+变量'负数排序保证精确路由先赢。排除和 filterRules 都在**生成期**做——隐藏接口不生成路由直接 404，零运行时开销。刷新是心跳无条件发 RefreshRoutes、locator 每次现算不叠缓存。整体取舍：匹配、选实例、可观测全部让渡给 SCG 官方机制，自己只做清单到路由的翻译；代价是依赖上要把 loadbalancer 显式引进来，否则 lb:// 全 503。"
 
 ## §4 终检（5 题，过 4 算过关）
 
@@ -55,7 +55,7 @@ next: "（本系列完）"
 
 | 简历原话 | 对应实现 | 证据 |
 |---|---|---|
-| 端点自动发现（零接入/排管理端点/跨实例一致） | Collector+Publisher+Listener | provider 4 测试+E2E① |
+| 端点自动发现（零接入/排管理端点/跨实例一致） | Collector+Publisher+Listener | provider 5 测试+E2E① |
 | 端点级路由（官方谓词/响应式 LB/隐藏接口 404/限流重试） | Locator+两自研谓词+FilterRule | E2E①-⑧ |
 | 实时生效（心跳即刷新） | RouteRefreshListener | E2E⑨ |
 | 依赖精简（SCG optional/loadbalancer 补声明） | gateway pom | 构建验证 |

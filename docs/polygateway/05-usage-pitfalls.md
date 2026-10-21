@@ -2,9 +2,9 @@
 title: "05-使用：工程陷阱簿与动手路径"
 series: "PolyGateway 接口级网关系列"
 previous: "04-refresh-tradeoffs.md"
-next: "06-interview-wrapup.md（待写）"
+next: "06-interview-wrapup.md"
 source_refs:
-  - "guide §6（7 条陷阱）§7（步骤 0-3）+ 配置源码已核：PolyGatewayGatewayProperties（PREFIX=polygateway.gateway:47/enabled:52 默认 true/excludes:57/filterRules:62）/ ProviderProperties（prefix:41/enabled:46 默认 true）/ E2E（PolyGatewayGatewayE2ETest——9 场景、locator.enabled=false:67）/ 全仓 11 测试文件 39 个 @Test"
+  - "guide §6（7 条陷阱）§7（步骤 0-3）+ 配置源码已核：PolyGatewayGatewayProperties（PREFIX=polygateway.gateway:47/enabled:52 默认 true/excludes:57/filterRules:62）/ ProviderProperties（prefix:41/enabled:46 默认 true）/ E2E（PolyGatewayGatewayE2ETest——9 场景、locator.enabled=false:67）/ 全仓 11 测试文件 42 个 @Test"
 ---
 
 # 05-使用：工程陷阱簿与动手路径
@@ -41,7 +41,7 @@ polygateway.gateway:
 ## §1 动手路径（guide §7 的压缩版）
 
 ```
-步骤 0 跑起来：mvn -f polygateway/pom.xml test（39 个 @Test/11 文件，全绿）
+步骤 0 跑起来：mvn -f polygateway/pom.xml test（42 个 @Test/11 文件，全绿）
 步骤 1 读 E2E：PolyGatewayGatewayE2ETest 九场景对照 02-04 篇——
         ①路径变量→200 ②filter-rule 响应头 ③Content-Type 匹配 ④不匹配→404
         ⑤双媒体类型 ⑥excludes→404 ⑦services 域（他服务同名接口仍 200）⑧未知路径→404 ⑨元数据+心跳→新路径 200

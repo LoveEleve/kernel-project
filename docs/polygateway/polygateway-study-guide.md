@@ -1,6 +1,6 @@
 # PolyGateway 吃透指南（源码地图 + 全链路 + 动手路径）
 
-> 对象：`/data/workspace/source-code/poly/polygateway`（4 模块 / 16 主类 / 39 测试，2026-10 全绿）
+> 对象：`/data/workspace/source-code/poly/polygateway`（4 模块 / 16 主类 / 42 测试，2026-10 全绿）
 > 代码：https://github.com/LoveEleve/poly-project/tree/main/polygateway
 > 用法：按 §7 的路径学；每节末尾的一句话总结就是"能讲出来的版本"。
 
@@ -40,7 +40,7 @@ Spring MVC 应用启动
   ② WebEndpointMappingsCollector 扫描所有 RequestMappingHandlerMapping
      每个 RequestMappingInfo → 六维 WebEndpointMapping（路径/方法/参数/请求头/Content-Type/Accept）
      过滤 org.springframework.boot.* 基础设施接口（actuator、error controller）
-     按六维确定性排序 → 按序号赋 id（同一套接口在任何实例上 id 一致）
+     按六维确定性排序 → 由六维内容哈希生成 id（同一接口跨实例一致，接口集不同也不漂移）
   ③ WebEndpointMappingCodec.encode() → JSON 数组
   ④ 写入实例 metadata：
      polygateway.web-endpoints = [{"patterns":["/orders/{id}"],"methods":["GET"],...}]
@@ -80,7 +80,7 @@ Spring MVC 应用启动
 | core | `WebEndpointMappingCodec` | 接口清单的 JSON 编解码（跨进程协议） | `encode(list)` / `decode(json)` |
 | core | `WebEndpointExclusion` | 排除规则（六维 AND + services 域） | `matches(serviceId, mapping)` |
 | core | `PolyGatewayConstants` | 元数据键 / 路由 id 前缀常量 | `WEB_ENDPOINTS_METADATA_NAME` 等 |
-| provider | `WebEndpointMappingsCollector` | 扫描 MVC HandlerMapping → 六维模型，排序赋 id | `collect(context)` |
+| provider | `WebEndpointMappingsCollector` | 扫描 MVC HandlerMapping → 六维模型，排序 + 内容稳定 id | `collect(context)` |
 | provider | `WebEndpointMetadataPublisher` | 注册前把清单 + context-path 写进实例 metadata | `publish(serviceInstance)` |
 | provider | `PolyGatewayProviderListener` | 监听注册前事件触发发布 | `onApplicationEvent()` |
 | gateway | `WebEndpointRouteDefinitionLocator` | **核心**：读全实例元数据 → 排序 → 生成 lb:// 路由 | `loadRouteDefinitions()` / `createRouteDefinition()` |
@@ -94,7 +94,7 @@ Spring MVC 应用启动
 | boot | `PolyGatewayProviderProperties` | `polygateway.provider.enabled` | — |
 | boot | `META-INF/spring/...AutoConfiguration.imports` | 两个自动配置类的注册 | Boot 3 标准机制 |
 
-测试分布：core 15 / provider 4 / gateway 16 / spring-boot 4（全绿）。
+测试分布：core 16 / provider 5 / gateway 16 / spring-boot 5（全绿）。
 
 一句话总结：**core 只有模型和协议、provider 只管"发"、gateway 只管"生成路由"、boot 只管"装配"——四层单向依赖，没有一处互相越界。**
 
@@ -162,7 +162,7 @@ routeOrder = -(字面段数 × 2) - 变量段数 + (通配段数 × 2)
 
 ### 4.5 全实例并集（金丝雀友好）
 
-`loadServiceRoutes` 遍历服务的**全部实例**，元数据 JSON 解码进 `LinkedHashSet`（`WebEndpointMapping` 的 equals 按六维算）：金丝雀实例独有 `/canary/orders` 也能生成路由；某实例元数据损坏只 warn 跳过不拖垮整体。context-path 取第一个非空的。
+`loadServiceRoutes` 遍历服务的**全部实例**，元数据 JSON 解码进 `LinkedHashSet`（`WebEndpointMapping` 的 equals 按六维算）：金丝雀实例独有 `/canary/orders` 也能生成路由；同一接口跨实例的 id 由内容哈希保证一致，不会因实例接口集不同而漂移；某实例元数据损坏只 warn 跳过不拖垮整体。context-path 取第一个非空的。
 
 ### 4.6 filterRules（给路由挂官方过滤器）
 
@@ -229,7 +229,7 @@ E2E 验证：往元数据追加 `/orders/{id}/lines` → 发一次心跳 → 请
 **步骤 0 — 跑起来**
 ```bash
 cd /data/workspace/source-code/poly
-mvn -f polygateway/pom.xml test          # 39 个测试，全绿
+mvn -f polygateway/pom.xml test          # 42 个测试，全绿
 ```
 
 **步骤 1 — 读全链路 E2E（一个测试覆盖 9 个场景）**
@@ -274,7 +274,7 @@ mvn -f polygateway/pom.xml test          # 39 个测试，全绿
 
 | 简历原话 | 对应实现 | 证据（测试） |
 |---|---|---|
-| 端点自动发现（零接入、排除管理端点、跨实例一致） | `WebEndpointMappingsCollector` + `WebEndpointMetadataPublisher` + `PolyGatewayProviderListener` | provider 4 测试 + E2E 场景① |
+| 端点自动发现（零接入、排除管理端点、跨实例一致） | `WebEndpointMappingsCollector` + `WebEndpointMetadataPublisher` + `PolyGatewayProviderListener` | provider 5 测试 + E2E 场景① |
 | 端点级路由（官方谓词+响应式负载均衡+零阻塞+隐藏接口 404+限流重试） | `WebEndpointRouteDefinitionLocator` + 两个自研谓词 + `PolyGatewayFilterRule` | E2E 场景①-⑧ |
 | 实时生效（心跳即刷新） | `PolyGatewayRouteRefreshListener` | E2E 场景⑨ |
 | 依赖精简（SCG optional / loadbalancer 补声明） | `polygateway-gateway/pom.xml` + README 快速开始 | 无（构建验证） |
