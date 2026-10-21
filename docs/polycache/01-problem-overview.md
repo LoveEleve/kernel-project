@@ -2,7 +2,7 @@
 title: "01-问题与全景：多机房各写各的怎么同步"
 series: "PolyCache 多机房复制系列"
 previous: "README.md"
-next: "02-无侵入拦截.md（待写）"
+next: "02-无侵入拦截.md"
 source_refs:
   - "poly/polycache/README.md（特性表+模块表+数据流）"
 ---
@@ -53,7 +53,7 @@ client.getBucket("user:1").get();           // 读命令——不复制
 ```
 业务代码（零改造）
   → [polycache-redisson] NettyHook 装进每条连接管线
-      命令编码完成后 → CommandCaptureHandler 看一眼：是写？→ [core] 查命令目录
+      命令编码前（值参数已由源 codec 编码）→ CommandCaptureHandler 看一眼：是写？→ [core] 查命令目录
   → [replicator] KafkaRedisCommandProducer：按 key 分区、单线程发 Kafka
   → Kafka topic（跨机房）
   → [replicator] Consumer 按分区顺序拉

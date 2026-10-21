@@ -22,7 +22,7 @@ next: "（本系列完）"
 | 问题 | 答案（组件） | 篇 |
 |---|---|---|
 | 零改造怎么看见命令？ | NettyHook + 管线尾出站 Handler | 02 |
-| 哪些命令该复制？ | Registry + ACL write 目录（多资源合并） | 03 |
+| 哪些命令该复制？ | Registry + ACL write 目录 + 手工 EVAL/EVALSHA（多资源合并） | 03 |
 | Redisson 脚本怎么覆盖？ | RedisScripts（SHA1 登记）+ EVALSHA→EVAL 翻译 | 03 |
 | 怎样不在事件循环上堵死？ | 队列 + 专职 sender 线程 | 04 |
 | 顺序靠什么？ | 单线程发送 + Kafka key 分区 | 04 |
@@ -68,7 +68,7 @@ next: "（本系列完）"
 
 > **问题**：多机房就近读写，Redis 原生主从是单向 WAN 复制、延迟带宽都差，应用双写要改每处代码——我们需要**业务零改造**的双向逻辑复制。
 >
-> **设计**：拦截点选在 Redisson 的 Netty 连接管线（所有 API 汇合处），用官方 NettyHook 挂出站 Handler；只复制写命令（Redis 官方 ACL write 目录），EVALSHA 通过 SCRIPT LOAD 登记翻译成 EVAL；消息走 Kafka **按 key 分区保序**，捕获端单线程发送不堵事件循环，**成功才发布、重放完成才提交偏移**（至少一次）；重放端用 ByteArrayCodec 字节直捅 CommandAsyncExecutor，**先克隆 Config 再装捕获**防回环。
+> **设计**：拦截点选在 Redisson 的 Netty 连接管线（所有 API 汇合处），用官方 NettyHook 挂出站 Handler；只复制写命令（Redis ACL write 目录 + 手工追加 EVAL/EVALSHA），EVALSHA 通过 SCRIPT LOAD 登记翻译成 EVAL；消息走 Kafka **按 key 分区保序**，捕获端单线程发送不堵事件循环，**成功才发布、重放完成才提交偏移**（至少一次）；重放端用 ByteArrayCodec 字节直捅 CommandAsyncExecutor，**先克隆 Config 再装捕获**防回环。
 >
 > **代价**：至少一次（INCR 可双加）、队列满丢弃无补齐、重放失败 3 次跳过——旁路系统"不伤主业务"的每一笔都是拿自己的完整性换的，这 10 笔账我们都写进了文档和监控计数。
 

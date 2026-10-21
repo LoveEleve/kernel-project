@@ -2,7 +2,7 @@
 title: "05-语义重放：怎么原样重放到对端"
 series: "PolyCache 多机房复制系列"
 previous: "04-kafka-transport.md"
-next: "06-动态连接路由.md（待写）"
+next: "06-动态连接路由.md"
 source_refs:
   - "polycache-replicator .../consumer/KafkaRedisCommandConsumer.java（126 行，全文已读）"
   - "polycache-redisson .../replay/RedisCommandReplayer.java（158 行，全文已读）"

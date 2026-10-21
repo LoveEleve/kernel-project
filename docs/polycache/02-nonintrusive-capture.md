@@ -2,11 +2,11 @@
 title: "02-无侵入拦截：命令怎么被看见"
 series: "PolyCache 多机房复制系列"
 previous: "01-problem-overview.md"
-next: "03-写过滤与EVAL学习.md（待写）"
+next: "03-写过滤与EVAL学习.md"
 source_refs:
   - "polycache-redisson .../capture/RedisCommandCaptureNettyHook.java（48 行，全文已读）"
-  - "polycache-redisson .../capture/CommandCaptureHandler.java（67 行，全文已读）"
-  - "polycache-redisson .../capture/RedisCommandCapture.java:149-206（applyTo+capture 两路）"
+  - "polycache-redisson .../capture/CommandCaptureHandler.java（75 行，全文已读）"
+  - "polycache-redisson .../capture/RedisCommandCapture.java:149-245（applyTo / CommandData / CommandsData + write promise）"
 ---
 
 # 02-无侵入拦截：命令怎么被看见
@@ -74,7 +74,7 @@ catch (Throwable e) {
 
 ## §5 边界（一句话翻篇）
 
-- `CommandsData`（pipeline 批量）与 skipResult 的特殊路径 → `lab :186-206` 用时查。
+- `CommandsData`（pipeline 批量）与 skipResult 的特殊路径 → `lab :187-245` 用时查；skipResult 在 Netty write 成功后才发布。
 - 拦截器 SPI（SPI=可插拔扩展点；在 capture 之后的过滤/改写链）→ 07。
 - SCRIPT LOAD 不复制只登记 → 03。
 

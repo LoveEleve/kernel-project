@@ -2,9 +2,9 @@
 title: "06-动态连接路由：运行期切换目标"
 series: "PolyCache 多机房复制系列"
 previous: "05-semantic-replay.md"
-next: "07-Spring集成与SPI.md（待写）"
+next: "07-Spring集成与SPI.md"
 source_refs:
-  - "polycache-redisson .../routing/DynamicRedissonClient.java（448 行，全文已读）"
+  - "polycache-redisson .../routing/DynamicRedissonClient.java（449 行，全文已读）"
 ---
 
 # 06-动态连接路由：运行期切换目标
@@ -56,15 +56,16 @@ try { ... } finally { clearTarget(); }
 runWithTarget("us", () -> {...});   // 作用域式——自动存旧值/还原，可嵌套
 ```
 
-`callWithTarget` 的实现就是 Tracing 03 那个模式的复刻：存旧 → 设置 → try/finally 还原（`:281-294`）。**池化线程的上下文泄漏**是分布式组件的通用病——wrap/作用域 API 是通用药。
+`callWithTarget` 的实现就是 Tracing 03 那个模式的复刻：存旧 → 设置 → try/finally 还原（`:282-295`）。**池化线程的上下文泄漏**是分布式组件的通用病——wrap/作用域 API 是通用药。
 
-**兜底**：选择的目标被别的线程移除了？`getCurrentClient`（`:306-319`）：warn → **清掉陈旧选择** → 回退默认目标——不空指针、不带着死目标跑。
+**兜底**：选择的目标被别的线程移除了？`getCurrentClient`（`:307-320`）：warn → **清掉陈旧选择** → 回退默认目标——不空指针、不带着死目标跑。
 
 ## §4 生命周期：owned 与 shared
 
 | | owned（传 Config 建的） | shared（传现成 Client） |
 |---|---|---|
 | 谁关 | 路由器关（addTarget 旧的也关） | 谁建谁关 |
+| 默认目标 | 不能移除（`removeTarget` 对当前默认目标抛 `IllegalArgumentException`；先 `setDefaultTarget` 到其它目标） | 同左 |
 | 典型用法 | 多机房目标都自建 | 接管外部已有的客户端 |
 
 `replaceTarget` = put 新的 + **关旧的**——javadoc 原话"in flight on the previous client may fail"（在途操作可能失败）：热替换不是零损切换，**换配置选低峰**。
@@ -76,7 +77,7 @@ runWithTarget("us", () -> {...});   // 作用域式——自动存旧值/还原�
 
 ## §6 边界（一句话翻篇）
 
-- Target 内部类/优雅停机参数（quiet 2s timeout 15s）→ 源码 :336-352 用时查。
+- Target 内部类/优雅停机参数（quiet 2s timeout 15s）→ 源码 :416-441 用时查。
 - 与 07 的装配关系（谁 new 它、重放客户端怎么绑）→ 07。
 - 本篇与复制主线的关系：动态路由是**独立能力**（多机房读侧/灰度也用得上），不参与复制数据流（01 数据流图里没有它）——README 特性表把它列在"能力"而非"链路"。
 

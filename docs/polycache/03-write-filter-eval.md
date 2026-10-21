@@ -2,12 +2,12 @@
 title: "03-写过滤与EVAL学习：哪些命令该复制"
 series: "PolyCache 多机房复制系列"
 previous: "02-nonintrusive-capture.md"
-next: "04-Kafka传输.md（待写）"
+next: "04-Kafka传输.md"
 source_refs:
   - "polycache-core .../command/RedisCommandRegistry.java（130 行，全文已读）"
   - "polycache-redisson .../capture/RedisScripts.java（131 行，全文已读）"
-  - "polycache-redisson .../capture/RedisCommandCapture.java:160-173,220-238,318"
-  - "polycache-core META-INF/redis-write-commands（182 行，8.4.0 ACL CAT write 生成）"
+  - "polycache-redisson .../capture/RedisCommandCapture.java:154-185,247-253,278,295"
+  - "polycache-core META-INF/redis-write-commands（182 行：8.4.0 ACL CAT write 生成 + 手工追加 EVAL/EVALSHA）"
 ---
 
 # 03-写过滤与EVAL学习：哪些命令该复制
@@ -27,7 +27,7 @@ SCRIPT LOAD "..." → 不复制本身——只是把脚本体登记进本地脚�
 
 ## §1 掌握卡（3 条）
 
-1. **默认过滤器一行**：`commandFilter = RedisCommandRegistry::isWriteCommand`——判定基于**类路径资源** `META-INF/redis-write-commands`（Redis 8.4.0 官方 `ACL`（Redis 的权限/分类系统）`CAT "write"` 生成，182 行）。
+1. **默认过滤器一行**：`commandFilter = RedisCommandRegistry::isWriteCommand`——判定基于**类路径资源** `META-INF/redis-write-commands`（Redis 8.4.0 官方 `ACL`（Redis 的权限/分类系统）`CAT "write"` 生成，182 行；文件末尾手工追加 `EVAL`/`EVALSHA`）。
 2. **多文件合并可扩展**：Registry 用 `getResources` 枚举**所有同名资源**合并——业务方 jar 里放自己的追加表就能扩（`#` 注释、自动大写）。
 3. **脚本两处理**：`SCRIPT LOAD` 不复制只登记（SHA1 按 Redis 同款算法算，LRU=最久未用先淘汰，上限 1024）；`EVALSHA` 登记过就**翻译成带脚本体的 EVAL**——重放不依赖对端 Redis 的脚本缓存。
 
@@ -37,7 +37,7 @@ SCRIPT LOAD "..." → 不复制本身——只是把脚本体登记进本地脚�
 
 **But**：裁决表谁来维护？Redis 命令几百个、还有模块命令（`BF.ADD`/`JSON.SET`…），手写白名单必漏。
 
-**Therefore**：借 Redis 官方的分类——**ACL 的 write 类**就是权威写命令集（连 `EVAL` 都在（脚本被 ACL 视为写）——所以 RMap.put 走的 EVAL **天然被覆盖**，README 特性表里"另外把 EVAL/EVALSHA 视为写命令"说的就是这个事实）。生成物放类路径，加载时多资源合并（`:102-117`），大写归一、`#` 注释。
+**Therefore**：借 Redis 官方的分类——**ACL 的 write 类**是基础写命令集；但 Redis 把 `EVAL`/`EVALSHA` 归为 scripting，不在 ACL write 里，所以资源文件在 ACL 快照末尾**手工追加**了这两条（README 特性表原话"另外把 EVAL/EVALSHA 视为写命令"）。RMap.put 走的 EVAL 因此被覆盖。生成物放类路径，加载时多资源合并（`:102-117`），大写归一、`#` 注释。
 
 **Cost**：目录基于 8.4.0 快照——Redis 新增命令要重新生成追加表；模块命令若不在 ACL write 类（个别模块自定义分类）要手工补。
 
@@ -50,7 +50,7 @@ Redisson 的很多数据结构（RMap/RAtomicLong 等）内部就是 Lua 脚本�
      → 不复制（对端自己会 load）
      → RedisScripts.register：SHA1（与 Redis 同算法）→ 存脚本体 → LRU 1024
 ② EVALSHA <sha> numkeys ...   （Redisson 日常发的是这个——省流量）
-     → buildMessage(:220-238)：find(sha) 命中？
+     → buildMessage(:247-253)：find(sha) 命中？
         命中 → 重组成 EVAL [脚本体, 其余参数]（首参替换，数组拷贝）
         未命中 → 原样复制 EVALSHA
 ③ 对端重放收到的是 EVAL（带完整脚本）→ 目标 Redis 无需有此脚本，直接执行
@@ -71,8 +71,8 @@ Redisson 的很多数据结构（RMap/RAtomicLong 等）内部就是 Lua 脚本�
 
 ## §6 Self-Test（4 题）
 
-- Q1：读命令为什么不能复制？写表为什么借 ACL 而不手写？
-- Q2：RMap.put 走 EVAL 为什么不用特殊处理？（EVAL 在 write 类里）
+- Q1：读命令为什么不能复制？写表为什么借 ACL 而不手写（为什么还要补 EVAL/EVALSHA）？
+- Q2：RMap.put 走 EVAL 为什么不用特殊处理？（EVAL/EVALSHA 是手工追加的写命令）
 - Q3：SCRIPT LOAD 和 EVALSHA 各自怎么处理？翻译后的重放为什么更稳？
 - Q4：EVALSHA 缓存未命中时复制什么？对端会遇到什么错？
 

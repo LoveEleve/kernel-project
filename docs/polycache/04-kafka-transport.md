@@ -2,11 +2,11 @@
 title: "04-Kafka传输：保序、背压与失败不复制"
 series: "PolyCache 多机房复制系列"
 previous: "03-write-filter-eval.md"
-next: "05-语义重放.md（待写）"
+next: "05-语义重放.md"
 source_refs:
   - "polycache-replicator .../producer/KafkaRedisCommandProducer.java（222 行，全文已读）"
   - "polycache-core .../command/RedisCommandMessage.java（key/keyBytes/source/timestamp/args）"
-  - "polycache-redisson .../capture/RedisCommandCapture.java:265-290（promise 成功才发布）"
+  - "polycache-redisson .../capture/RedisCommandCapture.java:311-317（promise 成功才发布）"
 ---
 
 # 04-Kafka传输：保序、背压与失败不复制
@@ -55,7 +55,7 @@ Kafka：key="user:1" → 固定分区 → 分区内保序
 | 队列满（消费太慢） | offer 失败→丢+计数+warn | :132-136 |
 | send 抛异常（同步段） | 丢+计数+warn | :181-184 |
 | send 异步失败 | **仅 warn，无应用层重试**（依赖 Kafka producer 自身 retries 配置） | :172-175 |
-| Redis 命令执行失败 | **根本不发布**（成功才复制；如 WRONGTYPE=类型不匹配类错误） | Capture :265-290 |
+| Redis 命令执行失败 | **根本不发布**（成功才复制；如 WRONGTYPE=类型不匹配类错误） | Capture :311-317 |
 
 ## §5 负面空间（本篇两笔）
 

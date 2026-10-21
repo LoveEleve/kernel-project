@@ -2,7 +2,7 @@
 title: "07-Spring集成与拦截器SPI"
 series: "PolyCache 多机房复制系列"
 previous: "06-dynamic-routing.md"
-next: "08-设计收口.md（待写）"
+next: "08-设计收口.md"
 source_refs:
   - "polycache-spring-boot .../PolyCacheAutoConfiguration.java（158 行，全文已读）"
   - "polycache-spring-boot .../PolyCacheRedissonConfigHolder.java（71 行，全文已读）"
